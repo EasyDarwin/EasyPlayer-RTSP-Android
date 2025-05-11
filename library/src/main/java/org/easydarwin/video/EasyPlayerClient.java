@@ -62,7 +62,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
     /* 视频编码 */
     public static final int EASY_SDK_VIDEO_CODEC_H264 = 0x1C;       /* H264 */
-    public static final int EASY_SDK_VIDEO_CODEC_H265 = 0x48323635; /* H265 */
+    public static final int EASY_SDK_VIDEO_CODEC_H265 = 0xAE; /* H265 */
     public static final int EASY_SDK_VIDEO_CODEC_MJPEG = 0x08;      /* MJPEG */
     public static final int EASY_SDK_VIDEO_CODEC_MPEG4 = 0x0D;      /* MPEG4 */
 
