@@ -1181,7 +1181,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                                         newSleepUs = 0;
                                                     }
 //                                            Log.d(TAG,String.format("sleep:%d", newSleepUs/1000));
-                                                    Thread.sleep(newSleepUs / 1000);
+//                                                    Thread.sleep(newSleepUs / 1000);
                                                     mCodec.releaseOutputBuffer(index, i420callback == null);
                                                 }
 

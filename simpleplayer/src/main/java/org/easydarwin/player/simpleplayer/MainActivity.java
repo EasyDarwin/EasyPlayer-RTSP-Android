@@ -29,7 +29,7 @@ public class MainActivity extends AppCompatActivity {
          * 第四个参数为一个ResultReceiver,用来接收SDK层发上来的事件通知;
          * 第五个参数为I420DataCallback,如果不为空,那底层会把YUV数据回调上来.
          */
-        client = new EasyPlayerClient(this, BuildConfig.KEY, textureView, null, null);
+        client = new EasyPlayerClient(this, textureView, null, null);
         final EditText et = new EditText(this);
         et.setHint("请输入RTSP地址");
         final SharedPreferences sp = PreferenceManager.getDefaultSharedPreferences(this);
