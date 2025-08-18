@@ -66,9 +66,7 @@ public class YUVExportFragment extends PlayFragment implements EasyPlayerClient.
             public void onClick(View v) {
                 int permissionCheck = ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.WRITE_EXTERNAL_STORAGE);
                 if (permissionCheck != PackageManager.PERMISSION_GRANTED) {
-                    ActivityCompat.requestPermissions(getActivity(),
-                            new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                            1);
+                    ActivityCompat.requestPermissions(getActivity(), new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 1);
                     return;
                 }
 
@@ -102,10 +100,8 @@ public class YUVExportFragment extends PlayFragment implements EasyPlayerClient.
                     return;
                 }
 
-                if (recordPaused)
-                    mStreamRender.resumeRecord();
-                else
-                    mStreamRender.pauseRecord();
+                if (recordPaused) mStreamRender.resumeRecord();
+                else mStreamRender.pauseRecord();
 
                 recordPaused = !recordPaused;
 
@@ -129,13 +125,7 @@ public class YUVExportFragment extends PlayFragment implements EasyPlayerClient.
         f.mkdirs();
 
         try {
-            mStreamRender.start(mUrl,
-                    mType,
-                    sendOption,
-                    Client.EASY_SDK_VIDEO_FRAME_FLAG | Client.EASY_SDK_AUDIO_FRAME_FLAG,
-                    "",
-                    "",
-                    autoRecord ? FileUtil.getMovieName(mUrl).getPath() : null);
+            mStreamRender.start(mUrl, mType, sendOption, Client.EASY_SDK_VIDEO_FRAME_FLAG | Client.EASY_SDK_AUDIO_FRAME_FLAG, "", "", autoRecord ? FileUtil.getMovieName(mUrl).getPath() : null);
         } catch (Exception e) {
             e.printStackTrace();
             Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show();

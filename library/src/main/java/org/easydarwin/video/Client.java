@@ -3,6 +3,7 @@ package org.easydarwin.video;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.support.v4.content.ContextCompat;
@@ -15,6 +16,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -103,16 +105,7 @@ public class Client implements Closeable {
 
         @Override
         public String toString() {
-            return "MediaInfo{" +
-                    "videoCodec=" + videoCodec +
-                    ", fps=" + fps +
-                    ", audioCodec=" + audioCodec +
-                    ", sample=" + sample +
-                    ", channel=" + channel +
-                    ", bitPerSample=" + bitPerSample +
-                    ", spsLen=" + spsLen +
-                    ", ppsLen=" + ppsLen +
-                    '}';
+            return "MediaInfo{" + "videoCodec=" + videoCodec + ", fps=" + fps + ", audioCodec=" + audioCodec + ", sample=" + sample + ", channel=" + channel + ", bitPerSample=" + bitPerSample + ", spsLen=" + spsLen + ", ppsLen=" + ppsLen + '}';
         }
     }
 
@@ -122,6 +115,8 @@ public class Client implements Closeable {
         void onMediaInfoCallBack(int _channelId, MediaInfo mi);
 
         void onEvent(int _channelId, int err, int info);
+
+        void sendSeiData(byte[] sei);
     }
 
     public static final int EASY_SDK_VIDEO_FRAME_FLAG = 0x01;
@@ -130,12 +125,15 @@ public class Client implements Closeable {
     public static final int EASY_SDK_RTP_FRAME_FLAG = 0x08;        /* RTP帧标志 */
     public static final int EASY_SDK_SDP_FRAME_FLAG = 0x10;        /* SDP帧标志 */
     public static final int EASY_SDK_MEDIA_INFO_FLAG = 0x20;        /* 媒体类型标志*/
+    public static final int EASY_SDK_SEI_FRAME_FLAG = 0x100;        /* SEI帧标志 */
+
 
     public static final int EASY_SDK_EVENT_CODEC_ERROR = 0x63657272;    /* ERROR */
     public static final int EASY_SDK_EVENT_CODEC_EXIT = 0x65786974;    /* EXIT */
 
     public static final int TRANSTYPE_TCP = 1;
     public static final int TRANSTYPE_UDP = 2;
+
     private static final String TAG = Client.class.getSimpleName();
 
     static {
@@ -241,8 +239,8 @@ public class Client implements Closeable {
     }
 
     private static void onSourceCallBack(int _channelId, int _channelPtr, int _frameType, byte[] pBuf, byte[] frameBuffer) {
-        if (BuildConfig.MEDIA_DEBUG) {
 
+        if (BuildConfig.MEDIA_DEBUG) {
             int permissionCheck = ContextCompat.checkSelfPermission(mContext, Manifest.permission.WRITE_EXTERNAL_STORAGE);
             if (permissionCheck == PackageManager.PERMISSION_GRANTED) {
                 // frameType + size + buffer
@@ -262,9 +260,16 @@ public class Client implements Closeable {
             }
         }
 
+
         final SourceCallBack callBack;
         synchronized (sCallbacks) {
             callBack = sCallbacks.get(_channelId);
+        }
+
+
+        if (_frameType == EASY_SDK_SEI_FRAME_FLAG) {
+            callBack.sendSeiData(pBuf);
+            return;
         }
 
         if (_frameType == 0) {
@@ -345,6 +350,8 @@ public class Client implements Closeable {
         }
     }
 
+
+
     private static void onEvent(int channel, int err, int state) {
         // state：1 Connecting, 2 连接错误, 3 连接线程退出
         // err的含义：http请求的返回码（200，400，401等等）
@@ -397,8 +404,7 @@ public class Client implements Closeable {
         h.removeCallbacks(closeTask);
         _channelPause.remove(_channel);
 
-        if (mCtx == 0)
-            throw new IOException("not opened or already closed");
+        if (mCtx == 0) throw new IOException("not opened or already closed");
 
         deInit(mCtx);
         mCtx = 0;

@@ -56,7 +56,7 @@ import uk.copywitchshame.senab.photoview.gestures.PhotoViewAttacher;
 /**
  * 播放器Fragment
  */
-public class PlayFragment extends Fragment implements TextureView.SurfaceTextureListener, PhotoViewAttacher.OnMatrixChangedListener {
+public class PlayFragment extends Fragment implements TextureView.SurfaceTextureListener, PhotoViewAttacher.OnMatrixChangedListener, EasyPlayerClient.SEIDataCallback {
     protected static final String TAG = "PlayFragment";
 
     public static final String ARG_PARAM1 = "param1";
@@ -152,11 +152,7 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
         cover = (ImageView) view.findViewById(R.id.surface_cover);
 
         if (!TextUtils.isEmpty(mUrl)) {
-            Glide.with(this)
-                    .load(FileUtil.getSnapFile(mUrl))
-                    .signature(new StringSignature(UUID.randomUUID().toString()))
-                    .fitCenter()
-                    .into(cover);
+            Glide.with(this).load(FileUtil.getSnapFile(mUrl)).signature(new StringSignature(UUID.randomUUID().toString())).fitCenter().into(cover);
         }
 
         return view;
@@ -181,8 +177,7 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
 
                 Activity activity = getActivity();
 
-                if (activity == null)
-                    return;
+                if (activity == null) return;
 
                 if (resultCode == EasyPlayerClient.RESULT_VIDEO_DISPLAYED) {
                     if (resultData != null) {
@@ -214,11 +209,9 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
                         ((PlayActivity) activity).onEvent(PlayFragment.this, state, errorCode, msg);
                     }
                 } else if (resultCode == EasyPlayerClient.RESULT_RECORD_BEGIN) {
-                    if (activity instanceof PlayActivity)
-                        ((PlayActivity) activity).onRecordState(1);
+                    if (activity instanceof PlayActivity) ((PlayActivity) activity).onRecordState(1);
                 } else if (resultCode == EasyPlayerClient.RESULT_RECORD_END) {
-                    if (activity instanceof PlayActivity)
-                        ((PlayActivity) activity).onRecordState(-1);
+                    if (activity instanceof PlayActivity) ((PlayActivity) activity).onRecordState(-1);
                 }
             }
         };
@@ -240,16 +233,14 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
         GestureDetector.SimpleOnGestureListener sgl = new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onDoubleTap(MotionEvent e) {
-                if (doubleTapListener != null)
-                    doubleTapListener.onDoubleTab(PlayFragment.this);
+                if (doubleTapListener != null) doubleTapListener.onDoubleTab(PlayFragment.this);
 
                 return super.onDoubleTap(e);
             }
 
             @Override
             public boolean onSingleTapUp(MotionEvent e) {
-                if (doubleTapListener != null)
-                    doubleTapListener.onSingleTab(PlayFragment.this);
+                if (doubleTapListener != null) doubleTapListener.onSingleTab(PlayFragment.this);
 
                 return super.onSingleTapUp(e);
             }
@@ -353,7 +344,7 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
 
     // 开始渲染
     protected void startRending(SurfaceTexture surface) {
-        mStreamRender = new EasyPlayerClient(getContext(), new Surface(surface), mResultReceiver);
+        mStreamRender = new EasyPlayerClient(getContext(), new Surface(surface), mResultReceiver, null, this);
 
         boolean autoRecord = SPUtil.getAutoRecord(getContext());
 
@@ -361,13 +352,7 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
         f.mkdirs();
 
         try {
-            mStreamRender.start(mUrl,
-                    mType < 2 ? Client.TRANSTYPE_TCP : Client.TRANSTYPE_UDP,
-                    sendOption,
-                    Client.EASY_SDK_VIDEO_FRAME_FLAG | Client.EASY_SDK_AUDIO_FRAME_FLAG,
-                    "",
-                    "",
-                    autoRecord ? FileUtil.getMovieName(mUrl).getPath() : null);
+            mStreamRender.start(mUrl, mType < 2 ? Client.TRANSTYPE_TCP : Client.TRANSTYPE_UDP, sendOption, Client.EASY_SDK_VIDEO_FRAME_FLAG | Client.EASY_SDK_AUDIO_FRAME_FLAG, "", "", autoRecord ? FileUtil.getMovieName(mUrl).getPath() : null);
         } catch (Exception e) {
             e.printStackTrace();
             Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show();
@@ -411,8 +396,7 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
                 }
             });
 
-            if (mLoadingPictureThumbTask != null)
-                mLoadingPictureThumbTask.cancel(true);
+            if (mLoadingPictureThumbTask != null) mLoadingPictureThumbTask.cancel(true);
 
             final int w = mTakePictureThumb.getWidth();
             final int h = mTakePictureThumb.getHeight();
@@ -437,8 +421,7 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
 
                     ImageView iv = mImageViewRef.get();
 
-                    if (iv == null)
-                        return;
+                    if (iv == null) return;
 
                     iv.setImageBitmap(bitmap);
                     iv.setVisibility(View.VISIBLE);
@@ -554,8 +537,7 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
     private void onVideoSizeChange() {
         Log.i(TAG, String.format("RESULT_VIDEO_SIZE RECEIVED :%d*%d", mWidth, mHeight));
 
-        if (mWidth == 0 || mHeight == 0)
-            return;
+        if (mWidth == 0 || mHeight == 0) return;
 
         if (mAttacher != null) {
             mAttacher.cleanup();
@@ -627,8 +609,7 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
     }
 
     protected void sendResult(int resultCode, Bundle resultData) {
-        if (mRR != null)
-            mRR.send(resultCode, resultData);
+        if (mRR != null) mRR.send(resultCode, resultData);
     }
 
     /* ======================== SurfaceTextureListener ======================== */
@@ -673,6 +654,18 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
         mAngleView.setCurrentProgress(-(int) ((currentMiddle - middle) * 100 / maxMovement));
     }
 
+
+
+
+    @Override
+    public void onSEIData(byte[] sei) {
+//        String seiStr = bytesToHex(sei);
+//        Log.d(TAG, "sei data = " + seiStr);
+        // 回调数据给监听器
+        if (seiDataListener != null) {
+            seiDataListener.onSEIDataReceived(sei);
+        }
+    }
     /* ======================== get/set ======================== */
 
     public interface OnDoubleTapListener {
@@ -709,11 +702,7 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
         this.mUrl = url;
 
         if (!TextUtils.isEmpty(mUrl)) {
-            Glide.with(this)
-                    .load(FileUtil.getSnapFile(mUrl))
-                    .signature(new StringSignature(UUID.randomUUID().toString()))
-                    .fitCenter()
-                    .into(cover);
+            Glide.with(this).load(FileUtil.getSnapFile(mUrl)).signature(new StringSignature(UUID.randomUUID().toString())).fitCenter().into(cover);
         }
     }
 
@@ -765,5 +754,15 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
 
     protected boolean isLandscape() {
         return getActivity().getRequestedOrientation() == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE || getActivity().getRequestedOrientation() == ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE;
+    }
+
+    public interface SEIDataListener {
+        void onSEIDataReceived(byte[] sei);
+    }
+
+    private SEIDataListener seiDataListener;
+
+    public void setSEIDataListener(SEIDataListener listener) {
+        this.seiDataListener = listener;
     }
 }

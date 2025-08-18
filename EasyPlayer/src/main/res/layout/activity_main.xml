@@ -68,7 +68,7 @@
             <FrameLayout
                 android:id="@+id/render_holder"
                 android:layout_width="match_parent"
-                android:layout_height="@dimen/render_wnd_height"></FrameLayout>
+                android:layout_height="@dimen/render_wnd_height" />
 
             <LinearLayout
                 android:id="@+id/live_video_bar"
@@ -140,7 +140,7 @@
             android:layout_height="match_parent"
             android:divider="?android:attr/listDivider"
             android:orientation="vertical"
-            android:visibility="gone"
+            android:visibility="visible"
             android:showDividers="middle">
 
             <TextView

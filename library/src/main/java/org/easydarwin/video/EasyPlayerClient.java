@@ -131,6 +131,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     private ByteBuffer mCSD0;
     private ByteBuffer mCSD1;
     private final I420DataCallback i420callback;
+    private SEIDataCallback mSEIDataCallback;
     private boolean mMuxerWaitingKeyVideo;
 
     /**
@@ -324,13 +325,25 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         mRR = receiver;
         i420callback = callback;
         lifecycler = null;
+        mSEIDataCallback = null;
     }
 
-    public EasyPlayerClient(Context context, final TextureView view, ResultReceiver receiver, I420DataCallback callback) {
+    public EasyPlayerClient(Context context, Surface surface, ResultReceiver receiver, I420DataCallback callback, SEIDataCallback seiDataCallback) {
+        mSurface = surface;
+        mContext = context;
+        mRR = receiver;
+        i420callback = callback;
+        lifecycler = null;
+        mSEIDataCallback = seiDataCallback;
+    }
+
+
+    public EasyPlayerClient(Context context, final TextureView view, ResultReceiver receiver, I420DataCallback callback, SEIDataCallback seiDataCallback) {
         lifecycler = new TextureLifecycler(view);
         mContext = context;
         mRR = receiver;
         i420callback = callback;
+        mSEIDataCallback = seiDataCallback;
 
         LifecycleObserver observer1 = new LifecycleObserver() {
             @OnLifecycleEvent(value = Lifecycle.Event.ON_DESTROY)
@@ -419,8 +432,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         if (url == null) {
             throw new NullPointerException("url is null");
         }
-        if (type == 0)
-            type = TRANSTYPE_TCP;
+        if (type == 0) type = TRANSTYPE_TCP;
         mNewestStample = 0;
         mWaitingKeyFrame = PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("waiting_i_frame", true);
         mWidth = mHeight = 0;
@@ -460,6 +472,11 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
     public static interface I420DataCallback {
         public void onI420Data(ByteBuffer buffer);
+
+    }
+
+    public static interface SEIDataCallback {
+        public void onSEIData(byte[] sei);
     }
 
     public void pause() {
@@ -604,12 +621,11 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 //                                    save2path(mBufferReuse, 0, outLen[0],"/sdcard/111.pcm", true);
                                     pumpPCMSample(mBufferReuse, outLen[0], frameInfo.stamp);
                                 }
-                                if (mAudioEnable)
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                                        mAudioTrack.write(mBufferReuse, 0, outLen[0], AudioTrack.WRITE_NON_BLOCKING);
-                                    } else {
-                                        mAudioTrack.write(mBufferReuse, 0, outLen[0]);
-                                    }
+                                if (mAudioEnable) if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                                    mAudioTrack.write(mBufferReuse, 0, outLen[0], AudioTrack.WRITE_NON_BLOCKING);
+                                } else {
+                                    mAudioTrack.write(mBufferReuse, 0, outLen[0]);
+                                }
 
                             }
                             frameInfo = null;
@@ -899,8 +915,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                 if (mCSD1 != null) {
                                     format.setByteBuffer("csd-1", mCSD1);
                                 } else {
-                                    if (frameInfo.codec == EASY_SDK_VIDEO_CODEC_H264)
-                                        throw new InvalidParameterException("csd-1 is invalid.");
+                                    if (frameInfo.codec == EASY_SDK_VIDEO_CODEC_H264) throw new InvalidParameterException("csd-1 is invalid.");
                                 }
 
                                 MediaCodecInfo ci = selectCodec(mime);
@@ -1051,8 +1066,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                         if (frameInfo != null) {
                                             byte[] pBuf = frameInfo.buffer;
                                             index = mCodec.dequeueInputBuffer(10);
-                                            if (false)
-                                                throw new IllegalStateException("fake state");
+                                            if (false) throw new IllegalStateException("fake state");
                                             if (index >= 0) {
                                                 ByteBuffer buffer = mCodec.getInputBuffers()[index];
                                                 buffer.clear();
@@ -1148,9 +1162,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                                         outputBuffer = tmp;
                                                     }
 
-                                                    if (mColorFormat == COLOR_FormatYUV420SemiPlanar
-                                                            || mColorFormat == COLOR_FormatYUV420PackedSemiPlanar
-                                                            || mColorFormat == COLOR_TI_FormatYUV420PackedSemiPlanar) {
+                                                    if (mColorFormat == COLOR_FormatYUV420SemiPlanar || mColorFormat == COLOR_FormatYUV420PackedSemiPlanar || mColorFormat == COLOR_TI_FormatYUV420PackedSemiPlanar) {
 
                                                         byte[] in = new byte[realWidth * realHeight * 3 / 2];
                                                         outputBuffer.clear();
@@ -1197,8 +1209,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                                 previousStampUs = info.presentationTimeUs;
                                         }
 
-                                    }
-                                    while (frameInfo != null || index < MediaCodec.INFO_TRY_AGAIN_LATER);
+                                    } while (frameInfo != null || index < MediaCodec.INFO_TRY_AGAIN_LATER);
                                 } catch (IllegalStateException ex) {
                                     // mediacodec error...
 
@@ -1206,8 +1217,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
                                     Log.e(TAG, String.format("init codec error due to %s", ex.getMessage()));
 
-                                    if (mCodec != null)
-                                        mCodec.release();
+                                    if (mCodec != null) mCodec.release();
                                     mCodec = null;
 
                                     if (displayer != null) {
@@ -1265,8 +1275,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
     public synchronized void startRecord(String path) {
-        if (mMediaInfo == null || mWidth == 0 || mHeight == 0 || mCSD0 == null)
-            return;
+        if (mMediaInfo == null || mWidth == 0 || mHeight == 0 || mCSD0 == null) return;
 
         mRecordingPath = path;
         EasyMuxer2 muxer2 = new EasyMuxer2();
@@ -1345,11 +1354,9 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
     private synchronized void pumpPCMSample(byte[] pcm, int length, long stampUS) {
         EasyMuxer2 muxer2 = this.muxer2;
-        if (muxer2 == null)
-            return;
+        if (muxer2 == null) return;
 
-        if (mRecordingStatus < 0)
-            return;
+        if (mRecordingStatus < 0) return;
 
         if (mMuxerWaitingKeyVideo) {
             Log.i(TAG, "writeFrame ignore due to no key frame!");
@@ -1525,18 +1532,17 @@ public class EasyPlayerClient implements Client.SourceCallBack {
             } else {
                 int width = frameInfo.width;
                 int height = frameInfo.height;
-                if (width != 0 && height != 0)
-                    if (width != mWidth || height != mHeight) {
-                        // resolution change...
-                        ResultReceiver rr = mRR;
-                        Bundle bundle = new Bundle();
-                        bundle.putInt(EXTRA_VIDEO_WIDTH, frameInfo.width);
-                        bundle.putInt(EXTRA_VIDEO_HEIGHT, frameInfo.height);
-                        mWidth = frameInfo.width;
-                        mHeight = frameInfo.height;
-                        Log.i(TAG, String.format("RESULT_VIDEO_SIZE:%d*%d", frameInfo.width, frameInfo.height));
-                        if (rr != null) rr.send(RESULT_VIDEO_SIZE, bundle);
-                    }
+                if (width != 0 && height != 0) if (width != mWidth || height != mHeight) {
+                    // resolution change...
+                    ResultReceiver rr = mRR;
+                    Bundle bundle = new Bundle();
+                    bundle.putInt(EXTRA_VIDEO_WIDTH, frameInfo.width);
+                    bundle.putInt(EXTRA_VIDEO_HEIGHT, frameInfo.height);
+                    mWidth = frameInfo.width;
+                    mHeight = frameInfo.height;
+                    Log.i(TAG, String.format("RESULT_VIDEO_SIZE:%d*%d", frameInfo.width, frameInfo.height));
+                    if (rr != null) rr.send(RESULT_VIDEO_SIZE, bundle);
+                }
             }
 //            Log.d(TAG, String.format("queue size :%d", mQueue.size()));
             try {
@@ -1548,10 +1554,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
             mNewestStample = frameInfo.stamp;
             frameInfo.audio = true;
             if (true) {
-                if (frameInfo.codec != EASY_SDK_AUDIO_CODEC_AAC &&
-                        frameInfo.codec != EASY_SDK_AUDIO_CODEC_G711A &&
-                        frameInfo.codec != EASY_SDK_AUDIO_CODEC_G711U &&
-                        frameInfo.codec != EASY_SDK_AUDIO_CODEC_G726) {
+                if (frameInfo.codec != EASY_SDK_AUDIO_CODEC_AAC && frameInfo.codec != EASY_SDK_AUDIO_CODEC_G711A && frameInfo.codec != EASY_SDK_AUDIO_CODEC_G711U && frameInfo.codec != EASY_SDK_AUDIO_CODEC_G726) {
                     ResultReceiver rr = mRR;
                     if (!mNotSupportedAudioCB && rr != null) {
                         mNotSupportedAudioCB = true;
@@ -1634,6 +1637,12 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                 break;
         }
         if (rr != null) rr.send(RESULT_EVENT, resultData);
+    }
+
+    @Override
+    public void sendSeiData(byte[] sei) {
+        if (mSEIDataCallback == null) return;
+        mSEIDataCallback.onSEIData(sei);
     }
 
     /**

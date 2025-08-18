@@ -46,8 +46,8 @@ import static android.content.res.Configuration.ORIENTATION_LANDSCAPE;
 
 /**
  * 播放页
- * */
-public class PlayActivity extends AppCompatActivity implements PlayFragment.OnDoubleTapListener {
+ */
+public class PlayActivity extends AppCompatActivity implements PlayFragment.OnDoubleTapListener, PlayFragment.SEIDataListener {
 
     private static final int MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE = 0x111;
 
@@ -145,11 +145,15 @@ public class PlayActivity extends AppCompatActivity implements PlayFragment.OnDo
 
             PlayFragment fragment = PlayFragment.newInstance(url, transportMode, sendOption, rr);
             fragment.setOnDoubleTapListener(this);
+            // 设置SEI监听器
+            fragment.setSEIDataListener(this);  // 添加这行
 
             getSupportFragmentManager().beginTransaction().add(R.id.render_holder, fragment).commit();
             mRenderFragment = fragment;
         } else {
             mRenderFragment = (PlayFragment) getSupportFragmentManager().findFragmentById(R.id.render_holder);
+            // 恢复时重新设置监听器
+            mRenderFragment.setSEIDataListener(this);
         }
 
         mBinding = DataBindingUtil.setContentView(this, R.layout.activity_main);
@@ -273,16 +277,13 @@ public class PlayActivity extends AppCompatActivity implements PlayFragment.OnDo
             new AlertDialog.Builder(this).setMessage(toTakePicture ? "EasyPlayer需要使用写文件权限来抓拍" : "EasyPlayer需要使用写文件权限来录像").setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
                 @Override
                 public void onClick(DialogInterface dialogInterface, int i) {
-                    ActivityCompat.requestPermissions(PlayActivity.this,
-                            new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE + (toTakePicture ? 0 : 1));
+                    ActivityCompat.requestPermissions(PlayActivity.this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE + (toTakePicture ? 0 : 1));
                 }
             }).show();
         } else {
             // No explanation needed, we can request the permission.
 
-            ActivityCompat.requestPermissions(this,
-                    new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                    MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE + (toTakePicture ? 0 : 1));
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE + (toTakePicture ? 0 : 1));
 
             // MY_PERMISSIONS_REQUEST_WRITE_EXTERNAL_STORAGE is an
             // app-defined int constant. The callback method gets the
@@ -358,8 +359,7 @@ public class PlayActivity extends AppCompatActivity implements PlayFragment.OnDo
     /* ====================== 音频 ====================== */
 
     protected void initSoundPool() {
-        if (true)
-            return;
+        if (true) return;
 
         AudioManager mAudioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
         mAudioVolumn = (float) mAudioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
@@ -391,7 +391,7 @@ public class PlayActivity extends AppCompatActivity implements PlayFragment.OnDo
     private void onVideoDisplayed() {
         mBinding.liveVideoBarTakePicture.setEnabled(true);
         mBinding.liveVideoBarRecord.setEnabled(true);
-        mBinding.msgTxt.append(String.format("[%s]\t%s\n",new SimpleDateFormat("HH:mm:ss").format(new Date()),"播放中"));
+        mBinding.msgTxt.append(String.format("[%s]\t%s\n", new SimpleDateFormat("HH:mm:ss").format(new Date()), "播放中"));
     }
 
     private void onPlayStart() {
@@ -451,8 +451,7 @@ public class PlayActivity extends AppCompatActivity implements PlayFragment.OnDo
                 ImageView mPlayAudio = (ImageView) view;
                 mPlayAudio.setImageState(recording ? new int[]{android.R.attr.state_checked} : new int[]{}, true);
 
-                if (recording)
-                    mPlayAudio.postDelayed(mResetRecordStateRunnable, 200);
+                if (recording) mPlayAudio.postDelayed(mResetRecordStateRunnable, 200);
             }
         } else {
             requestWriteStorage(false);
@@ -484,18 +483,44 @@ public class PlayActivity extends AppCompatActivity implements PlayFragment.OnDo
     /* ====================== PlayFragment ====================== */
 
     /*
-    * state：1、连接中，2、连接错误，3、连接线程退出
-    * */
+     * state：1、连接中，2、连接错误，3、连接线程退出
+     * */
     public void onEvent(PlayFragment playFragment, int state, int err, String msg) {
-        mBinding.msgTxt.append(String.format("[%s]\t%s\t\n",
-                new SimpleDateFormat("HH:mm:ss").format(new Date()),
-                msg));
+        mBinding.msgTxt.append(String.format("[%s]\t%s\t\n", new SimpleDateFormat("HH:mm:ss").format(new Date()), msg));
     }
 
     public void onRecordState(int status) {
         ImageView mPlayAudio = mBinding.liveVideoBarRecord;
         mPlayAudio.setImageState(status == 1 ? new int[]{android.R.attr.state_checked} : new int[]{}, true);
         mPlayAudio.removeCallbacks(mResetRecordStateRunnable);
+    }
+
+    public static String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            // 每个字节转成两位16进制（不足补0），并大写显示
+            sb.append(String.format("%02X ", b));
+        }
+        return sb.toString().trim(); // 移除末尾空格
+    }
+
+    @Override
+    public void onSEIDataReceived(final byte[] sei) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                // 在TextView中显示SEI数据
+                String seiData = bytesToHex(sei);
+                mBinding.msgTxt.append(String.format("[%s] 收到SEI[%d]: %s \n", new SimpleDateFormat("HH:mm:ss").format(new Date()), sei.length, seiData));
+                // 自动滚动到底部
+                final int scrollAmount = mBinding.msgTxt.getLayout().getLineTop(mBinding.msgTxt.getLineCount()) - mBinding.msgTxt.getHeight();
+                if (scrollAmount > 0) {
+                    mBinding.msgTxt.scrollTo(0, scrollAmount);
+                } else {
+                    mBinding.msgTxt.scrollTo(0, 0);
+                }
+            }
+        });
     }
 
 //    private static final AtomicInteger sNextGeneratedId = new AtomicInteger(1);
