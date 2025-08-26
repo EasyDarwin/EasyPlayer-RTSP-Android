@@ -30,12 +30,11 @@ Android：Android Studio编译；
 
 - Android RTSP专用版：[http://app.tsingsee.com/EasyRTSPlayer](http://app.tsingsee.com/EasyRTSPlayer)
 
-
-## 技术支持 ##
-
-- 邮件：[support@easydarwin.org](mailto:support@easydarwin.org) 
-
 ## 获取更多信息 ##
+
+<img width="185" height="184" alt="QQ_1756176182992" src="https://github.com/user-attachments/assets/1fb42348-2bf8-4ee5-9cb0-610385067c99" />
+
+技术资料：关注‘EasyPlayer’公众号
 
 EasyDarwin社区：[www.EasyDarwin.org](https://www.easydarwin.org)
 
