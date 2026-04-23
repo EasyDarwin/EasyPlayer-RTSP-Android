@@ -906,6 +906,21 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                 // 指定解码后的帧格式
                                 format.setInteger(MediaFormat.KEY_COLOR_FORMAT, COLOR_FormatYUV420Flexible);
 
+
+                                if (Build.VERSION.SDK_INT >= 23) {
+                                    format.setFloat(MediaFormat.KEY_OPERATING_RATE, 60f); // 或实际fps * 1.5
+                                }
+
+                                if (Build.VERSION.SDK_INT >= 26) { // Android 8.0+
+                                    format.setInteger(MediaFormat.KEY_LATENCY, 0); // 目标最低延迟
+                                }
+
+                                //低延时解码
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                    format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1);
+                                }
+
+
                                 if (mCSD0 != null) {
                                     format.setByteBuffer("csd-0", mCSD0);
                                 } else {

@@ -434,7 +434,7 @@ public class PlayListActivity extends AppCompatActivity implements View.OnClickL
     }
 
     public static boolean isPro() {
-        return BuildConfig.FLAVOR.equals("pro");
+        return  false;
     }
 
     public void onMultiPlay(View view) {
