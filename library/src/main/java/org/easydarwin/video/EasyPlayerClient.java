@@ -541,8 +541,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
     private void startAudio() {
         mAudioThread = new Thread("AUDIO_CONSUMER") {
-
-            @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
             @Override
             public void run() {
                 {
@@ -854,8 +852,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
     private void startCodec() {
         mThread = new Thread("VIDEO_CONSUMER") {
-
-            @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
             @Override
             public void run() {
                 Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO);
@@ -897,6 +893,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                             try {
                                 if (PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("use-sw-codec", false)) {
                                     throw new IllegalStateException("user set sw codec");
+                                    //直接走软解
                                 }
 
                                 final String mime = frameInfo.codec == EASY_SDK_VIDEO_CODEC_H264 ? "video/avc" : "video/hevc";
@@ -908,7 +905,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
 
                                 if (Build.VERSION.SDK_INT >= 23) {
-                                    format.setFloat(MediaFormat.KEY_OPERATING_RATE, 60f); // 或实际fps * 1.5
+                                    format.setFloat(MediaFormat.KEY_OPERATING_RATE, 30f); // 或实际fps * 1.5
                                 }
 
                                 if (Build.VERSION.SDK_INT >= 26) { // Android 8.0+
@@ -1004,6 +1001,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
                         if (frameInfo != null) {
                             Log.d(TAG, "video " + frameInfo.stamp + " take[" + (frameInfo.stamp - lastFrameStampUs) + "]");
+                            //处理分辨率变化 重新初始化 mCodec
                             if (frameHeight != 0 && frameWidth != 0) {
                                 if (frameInfo.width != 0 && frameInfo.height != 0) {
                                     if (frameInfo.width != frameWidth || frameInfo.height != frameHeight) {
@@ -1025,6 +1023,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                         }
 
                         do {
+                            // 走软解码
                             if (mDecoder != null) {
                                 if (frameInfo != null) {
                                     long decodeBegin = SystemClock.elapsedRealtime();
@@ -1066,16 +1065,17 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                         if (sleepTime > 0) {
                                             sleepTime %= 100000;
                                             long cache = mNewestStample - frameInfo.stamp;
-                                            sleepTime = fixSleepTime(sleepTime, cache, 50000);
-                                            if (sleepTime > 0) {
-                                                Thread.sleep(sleepTime / 1000);
-                                            }
+//                                            sleepTime = fixSleepTime(sleepTime, cache, 50000);
+////                                            if (sleepTime > 0) {
+////                                                Thread.sleep(sleepTime / 1000);
+////                                            }
                                             Log.d(TAG, "cache:" + cache);
                                         }
                                     }
                                     previousStampUs = frameInfo.stamp;
                                 }
                             } else {
+                                // 走软硬解码
                                 try {
                                     do {
                                         if (frameInfo != null) {
@@ -1156,6 +1156,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                                     outputBuffer = mCodec.getOutputBuffers()[index];
                                                 }
 
+                                                //有回调才走
                                                 if (i420callback != null && outputBuffer != null) {
                                                     if (sliceHeight != realHeight) {
                                                         ByteBuffer tmp = ByteBuffer.allocateDirect(realWidth * realHeight * 3 / 2);
@@ -1207,8 +1208,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                                     if (newSleepUs < 0) {
                                                         newSleepUs = 0;
                                                     }
-//                                            Log.d(TAG,String.format("sleep:%d", newSleepUs/1000));
-//                                                    Thread.sleep(newSleepUs / 1000);
+                                                    Log.d(TAG, String.format("sleep:%d", newSleepUs / 1000));
+                                                    Thread.sleep(newSleepUs / 1000);
                                                     mCodec.releaseOutputBuffer(index, i420callback == null);
                                                 }
 
@@ -1431,7 +1432,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         }
     }
 
-    @TargetApi(Build.VERSION_CODES.JELLY_BEAN)
     @Override
     public void onSourceCallBack(int _channelId, int _channelPtr, int _frameType, Client.FrameInfo frameInfo) {
 //        long begin = SystemClock.elapsedRealtime();
@@ -1451,6 +1451,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         }
         if (_frameType == Client.EASY_SDK_VIDEO_FRAME_FLAG) {
             //Log.d(TAG,String.format("receive video frame"));
+
+            //处理视频数据
             if (frameInfo.codec != EASY_SDK_VIDEO_CODEC_H264 && frameInfo.codec != EASY_SDK_VIDEO_CODEC_H265) {
                 ResultReceiver rr = mRR;
                 if (!mNotSupportedVideoCB && rr != null) {

@@ -122,8 +122,8 @@ public class Client implements Closeable {
     public static final int EASY_SDK_VIDEO_FRAME_FLAG = 0x01;
     public static final int EASY_SDK_AUDIO_FRAME_FLAG = 0x02;
     public static final int EASY_SDK_EVENT_FRAME_FLAG = 0x04;
-    public static final int EASY_SDK_RTP_FRAME_FLAG = 0x08;        /* RTP帧标志 */
-    public static final int EASY_SDK_SDP_FRAME_FLAG = 0x10;        /* SDP帧标志 */
+    public static final int EASY_SDK_RTP_FRAME_FLAG = 0x08;         /* RTP帧标志 */
+    public static final int EASY_SDK_SDP_FRAME_FLAG = 0x10;         /* SDP帧标志 */
     public static final int EASY_SDK_MEDIA_INFO_FLAG = 0x20;        /* 媒体类型标志*/
     public static final int EASY_SDK_SEI_FRAME_FLAG = 0x100;        /* SEI帧标志 */
 
@@ -298,13 +298,6 @@ public class Client implements Closeable {
 
                 buffer.get(mi.sps);
                 buffer.get(mi.pps);
-//                    int videoCodec;int fps;
-//                    int audioCodec;int sample;int channel;int bitPerSample;
-//                    int spsLen;
-//                    int ppsLen;
-//                    byte[]sps;
-//                    byte[]pps;
-
                 callBack.onMediaInfoCallBack(_channelId, mi);
             }
             return;
@@ -349,8 +342,6 @@ public class Client implements Closeable {
             callBack.onSourceCallBack(_channelId, _channelPtr, _frameType, fi);
         }
     }
-
-
 
     private static void onEvent(int channel, int err, int state) {
         // state：1 Connecting, 2 连接错误, 3 连接线程退出
