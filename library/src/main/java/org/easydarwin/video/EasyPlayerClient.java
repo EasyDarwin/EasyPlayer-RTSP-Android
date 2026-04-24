@@ -44,8 +44,6 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import static android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
 import static android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible;
-import static android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedPlanar;
-import static android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar;
 import static android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420PackedSemiPlanar;
 import static android.media.MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar;
 import static android.media.MediaCodecInfo.CodecCapabilities.COLOR_TI_FormatYUV420PackedSemiPlanar;
@@ -905,7 +903,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
 
                                 if (Build.VERSION.SDK_INT >= 23) {
-                                    format.setFloat(MediaFormat.KEY_OPERATING_RATE, 30f); // 或实际fps * 1.5
+                                    format.setFloat(MediaFormat.KEY_OPERATING_RATE, 30.0f);
                                 }
 
                                 if (Build.VERSION.SDK_INT >= 26) { // Android 8.0+
@@ -913,10 +911,9 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                 }
 
                                 //低延时解码
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                if (Build.VERSION.SDK_INT >= 30) {
                                     format.setInteger(MediaFormat.KEY_LOW_LATENCY, 1);
                                 }
-
 
                                 if (mCSD0 != null) {
                                     format.setByteBuffer("csd-0", mCSD0);
@@ -1094,7 +1091,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                                 frameInfo = null;
                                             }
                                         }
-                                        index = mCodec.dequeueOutputBuffer(info, 10); //
+                                        index = mCodec.dequeueOutputBuffer(info, 0); //
                                         switch (index) {
                                             case MediaCodec.INFO_OUTPUT_BUFFERS_CHANGED:
                                                 Log.i(TAG, "INFO_OUTPUT_BUFFERS_CHANGED");
@@ -1208,9 +1205,9 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                                     if (newSleepUs < 0) {
                                                         newSleepUs = 0;
                                                     }
-                                                    Log.d(TAG, String.format("sleep:%d", newSleepUs / 1000));
-                                                    Thread.sleep(newSleepUs / 1000);
+//                                                    Log.d(TAG, String.format("sleep:%d", newSleepUs / 1000));
                                                     mCodec.releaseOutputBuffer(index, i420callback == null);
+//                                                    Thread.sleep(40);
                                                 }
 
                                                 if (firstTime) {
