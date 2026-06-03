@@ -182,12 +182,12 @@ public class PlayListActivity extends AppCompatActivity implements View.OnClickL
             }
         });
 
-        mBinding.toolbarAbout.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startActivity(new Intent(PlayListActivity.this, AboutActivity.class));
-            }
-        });
+//        mBinding.toolbarAbout.setOnClickListener(new View.OnClickListener() {
+//            @Override
+//            public void onClick(View v) {
+//                startActivity(new Intent(PlayListActivity.this, AboutActivity.class));
+//            }
+//        });
 
         /* ==================== 版本更新 ==================== */
         String url;
@@ -429,8 +429,8 @@ public class PlayListActivity extends AppCompatActivity implements View.OnClickL
      * 显示key有限期
      * */
     private void notifyAboutColorChange() {
-        ImageView iv = findViewById(R.id.toolbar_about);
-        iv.setImageResource(R.drawable.new_version1);
+//        ImageView iv = findViewById(R.id.toolbar_about);
+//        iv.setImageResource(R.drawable.new_version1);
     }
 
     public static boolean isPro() {

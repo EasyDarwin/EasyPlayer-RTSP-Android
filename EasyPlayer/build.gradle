@@ -6,10 +6,10 @@ android {
 
     defaultConfig {
         applicationId "org.easydarwin.easyplayer"
-        minSdkVersion 19
+        minSdkVersion 21
         targetSdkVersion 31
-        versionCode 14210703
-        versionName "1.4.21.0703"
+        versionCode 14260428
+        versionName "1.4.26.0428"
         testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
         buildConfigField 'boolean', 'YUV_EXPORT', 'false'
 

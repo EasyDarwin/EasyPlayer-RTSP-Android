@@ -90,6 +90,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     public static final int RESULT_EVENT = 04;
     public static final int RESULT_UNSUPPORTED_VIDEO = 05;
     public static final int RESULT_UNSUPPORTED_AUDIO = 06;
+
     public static final int RESULT_RECORD_BEGIN = 7;
     public static final int RESULT_RECORD_END = 8;
 
@@ -889,7 +890,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                             initFrameInfo = frameInfo;
 
                             try {
-                                if (PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("use-sw-codec", false)) {
+                                //软解 解码
+                                if (PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("use-sw-codec", true)) {
                                     throw new IllegalStateException("user set sw codec");
                                     //直接走软解
                                 }
