@@ -329,6 +329,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     private volatile boolean mReconnecting;
     private long mReconnectStartMs;
     private int mReconnectCount;
+    private int mPlayAttemptCount;
+    private int mPlaySuccessCount;
     private boolean mTimeout;
     private boolean mNotSupportedVideoCB, mNotSupportedAudioCB;
 
@@ -502,6 +504,22 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         rr.send(0, data);
     }
 
+    private void sendPlaySuccessRate() {
+        mPlaySuccessCount++;
+        ResultReceiver rr = mRR;
+        if (rr == null) {
+            return;
+        }
+        float rate = mPlaySuccessCount > 0 ? mPlaySuccessCount * 100f / (mPlayAttemptCount + mPlaySuccessCount) : 0f;
+        Bundle data = new Bundle();
+        data.putInt("code", 907);
+        data.putFloat("data", rate);
+        data.putString("msg", String.format("播放成功率: %.1f%% (%d/%d)", rate, mPlaySuccessCount, mPlayAttemptCount + mPlaySuccessCount));
+        Log.i(TAG, String.format("play success rate: %.1f%% (%d/%d)", rate, mPlaySuccessCount, mPlayAttemptCount));
+        rr.send(0, data);
+
+    }
+
     private void handleDecodeType(int decodeType) {
         ResultReceiver rr = mRR;
         if (rr == null) return;
@@ -630,6 +648,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         mReconnectStartMs = 0;
         mReconnectCount = 0;
         mNewestStample = 0;
+        mPlayAttemptCount = 0;
     }
 
     public long receivedDataLength() {
@@ -1726,9 +1745,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                     break;
                 case 3:
                     data.putString("msg", "连接成功");
-                    if (mReconnecting) {
-                        sendReconnectDuration();
-                    }
+                    if (mReconnecting) sendReconnectDuration();
+                    sendPlaySuccessRate();
                     break;
                 case 4:
                     data.putString("msg", "连接失败");
@@ -1745,6 +1763,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                         mReconnectStartMs = SystemClock.elapsedRealtime();
                     }
                     mReconnectCount++;
+                    mPlayAttemptCount++;
                     data.putString("msg", "重连中");
                     break;
                 case 8:
