@@ -29,6 +29,7 @@ import org.easydarwin.audio.EasyAACMuxer;
 import org.easydarwin.sw.JNIUtil;
 import org.easydarwin.util.CodecSpecificDataUtil;
 import org.easydarwin.util.TextureLifecycler;
+import org.json.JSONObject;
 
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -325,6 +326,9 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     private long mPlayStartElapsedMs;
     private volatile boolean mFirstFrameTTFFSent;
     private volatile boolean mDecodeFailedSent;
+    private volatile boolean mReconnecting;
+    private long mReconnectStartMs;
+    private int mReconnectCount;
     private boolean mTimeout;
     private boolean mNotSupportedVideoCB, mNotSupportedAudioCB;
 
@@ -462,6 +466,9 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         mPlayStartElapsedMs = SystemClock.elapsedRealtime();
         mFirstFrameTTFFSent = false;
         mDecodeFailedSent = false;
+        mReconnecting = false;
+        mReconnectStartMs = 0;
+        mReconnectCount = 0;
         mWaitingKeyFrame = PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("waiting_i_frame", true);
         mWidth = mHeight = 0;
         mQueue.clear();
@@ -485,36 +492,50 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         if (mFirstFrameTTFFSent) return;
         mFirstFrameTTFFSent = true;
         ResultReceiver rr = mRR;
-        if (rr == null)  return;
+        if (rr == null) return;
         long ttffMs = SystemClock.elapsedRealtime() - mPlayStartElapsedMs;
         Bundle data = new Bundle();
-        data.putInt("code",902);
-        data.putLong("data",ttffMs);
-        data.putString("msg",String.format("首帧时间: %d ms", ttffMs));
+        data.putInt("code", 902);
+        data.putLong("data", ttffMs);
+        data.putString("msg", String.format("首帧时间: %d ms", ttffMs));
         Log.i(TAG, String.format("first frame TTFF: %d ms, decodeType: %d", ttffMs, decodeType));
         rr.send(0, data);
     }
 
     private void handleDecodeType(int decodeType) {
         ResultReceiver rr = mRR;
-        if (rr == null)  return;
+        if (rr == null) return;
         Bundle data = new Bundle();
-        data.putInt("code",901);
-        data.putLong("data",decodeType);
-        data.putString("msg",String.format("解码方式: %s", decodeType==0?"软解":"硬解"));
+        data.putInt("code", 901);
+        data.putLong("data", decodeType);
+        data.putString("msg", String.format("解码方式: %s", decodeType == 0 ? "软解" : "硬解"));
         rr.send(0, data);
     }
 
     private void sendVideoDecodeFailed(String reason) {
-        if (mDecodeFailedSent)  return;
+        if (mDecodeFailedSent) return;
         mDecodeFailedSent = true;
         ResultReceiver rr = mRR;
-        if (rr == null)   return;
+        if (rr == null) return;
         Bundle data = new Bundle();
-        data.putInt("code",903);
+        data.putInt("code", 903);
         data.putString("msg", reason);
         Log.e(TAG, "video decode failed: " + reason);
         rr.send(0, data);
+    }
+
+    private void sendReconnectDuration() {
+        long reconnectMs = SystemClock.elapsedRealtime() - mReconnectStartMs;
+        ResultReceiver rr = mRR;
+        if (rr == null) return;
+        Bundle data = new Bundle();
+        data.putInt("code", 906);
+        data.putString("msg", String.format("重连%d次数 耗时: %d ms", mReconnectCount, reconnectMs));
+        Log.i(TAG, String.format("reconnect count: %d, duration: %d ms", mReconnectCount, reconnectMs));
+        rr.send(0, data);
+        mReconnecting = false;
+        mReconnectCount = 0;
+
     }
 
     private VideoCodec.VideoDecoderLite tryCreateSoftDecoder(Object surface, boolean h264, String failReason) {
@@ -605,6 +626,9 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         }
         mQueue.clear();
         mClient = null;
+        mReconnecting = false;
+        mReconnectStartMs = 0;
+        mReconnectCount = 0;
         mNewestStample = 0;
     }
 
@@ -963,7 +987,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                             try {
                                 //软解 解码
                                 if (PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("use-sw-codec", true)) {
-                                    Log.d(TAG,"走软解");
+                                    Log.d(TAG, "走软解");
                                     handleDecodeType(0);
                                     //直接走软解
                                     throw new IllegalStateException("user set sw codec");
@@ -1518,8 +1542,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                 if (!mNotSupportedVideoCB && rr != null) {
                     mNotSupportedVideoCB = true;
                     Bundle data = new Bundle();
-                    data.putInt("code",904);
-                    data.putString("msg","不支持该编码");
+                    data.putInt("code", 904);
+                    data.putString("msg", "不支持该编码");
                     rr.send(0, data);
                 }
                 return;
@@ -1559,7 +1583,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                 mHeight = frameInfo.height;
                 Bundle data = new Bundle();
                 data.putInt("code", 900);
-                data.putString("msg", String.format("分辨率 :%d x %d ;",mWidth,mHeight));
+                data.putString("msg", String.format("分辨率 :%d x %d ;", mWidth, mHeight));
                 if (rr != null) rr.send(0, data);
                 Log.i(TAG, String.format("width:%d,height:%d", mWidth, mHeight));
 
@@ -1613,15 +1637,13 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                     ResultReceiver rr = mRR;
                     Bundle data = new Bundle();
                     data.putInt("code", 9003);
-                    data.putString("msg",String.format("变化后的宽高:%dx%d",frameInfo.width,frameInfo.height));
+                    data.putString("msg", String.format("变化后的宽高:%dx%d", frameInfo.width, frameInfo.height));
                     mWidth = frameInfo.width;
                     mHeight = frameInfo.height;
                     Log.i(TAG, String.format("RESULT_VIDEO_SIZE:%d*%d", frameInfo.width, frameInfo.height));
 
                     if (rr != null) rr.send(0, data);
                 }
-
-
 
 
             }
@@ -1641,8 +1663,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                         mNotSupportedAudioCB = true;
                         if (rr != null) {
                             Bundle data = new Bundle();
-                            data.putInt("code",905);
-                            data.putString("msg","不支持该音频格式");
+                            data.putInt("code", 905);
+                            data.putString("msg", "不支持该音频格式");
                             rr.send(0, data);
                         }
                     }
@@ -1660,10 +1682,10 @@ public class EasyPlayerClient implements Client.SourceCallBack {
             if (!mTimeout) {
                 mTimeout = true;
                 ResultReceiver rr = mRR;
-                if (rr != null){
+                if (rr != null) {
                     Bundle data = new Bundle();
-                    data.putInt("code",9);
-                    data.putString("msg","超时");
+                    data.putInt("code", 9);
+                    data.putString("msg", "超时");
                     rr.send(0, data);
                 }
             }
@@ -1680,12 +1702,13 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         mMediaInfo = mi;
         Log.i(TAG, String.format("MediaInfo fetchd\n%s", mi));
     }
+
     @Override
     public void onEvent(int channel, int err, int info, String msg) {
         Log.d("SimplePlayer  ====", "err=" + err + ",info=" + info + ",msg = " + msg);
         ResultReceiver rr = mRR;
         Bundle data = new Bundle();
-        if (err != 0 ) {
+        if (err != 0) {
             data.putInt("code", err);
             data.putString("msg", msg);
         } else {
@@ -1703,6 +1726,9 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                     break;
                 case 3:
                     data.putString("msg", "连接成功");
+                    if (mReconnecting) {
+                        sendReconnectDuration();
+                    }
                     break;
                 case 4:
                     data.putString("msg", "连接失败");
@@ -1714,6 +1740,11 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                     data.putString("msg", "流中断");
                     break;
                 case 7:
+                    if (!mReconnecting) {
+                        mReconnecting = true;
+                        mReconnectStartMs = SystemClock.elapsedRealtime();
+                    }
+                    mReconnectCount++;
                     data.putString("msg", "重连中");
                     break;
                 case 8:
@@ -1723,13 +1754,14 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                     data.putString("msg", "超时");
                     break;
                 case 10:
+                    mReconnecting = false;
                     data.putString("msg", "连接退出");
                     break;
                 default:
                     data.putString("msg", "");
             }
         }
-        if (rr != null ) rr.send(0, data);
+        if (rr != null) rr.send(0, data);
     }
 
     @Override

@@ -58,6 +58,7 @@ public class MainActivity extends AppCompatActivity {
          *   903 解码失败
          *   904 不支持该编码
          *   905 不支持该音频格式
+         *   906 重连耗时（data=毫秒，count=第几次重连）
          *
          */
 
@@ -69,7 +70,9 @@ public class MainActivity extends AppCompatActivity {
                     Log.i(TAG, "onReceiveResult: " + data.toString());
                     int mCode = data.getInt("code");
                     String msg = data.getString("msg");
-                    String line = String.format("code:%d  msg: %s",mCode,msg);
+                    String line = mCode == 906
+                            ? String.format("code:%d  count:%d  msg: %s", mCode, data.getInt("count"), msg)
+                            : String.format("code:%d  msg: %s", mCode, msg);
                     appendEvent(line);
                 }
             }
