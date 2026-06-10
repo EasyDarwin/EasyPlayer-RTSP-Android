@@ -6,14 +6,23 @@
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
-    <TextureView
-        android:id="@+id/texture_view"
+    <!-- TextureView 自身不支持 background，用父容器铺黑底 -->
+    <FrameLayout
+        android:id="@+id/video_container"
         android:layout_width="0dp"
         android:layout_height="0dp"
+        android:background="@android:color/black"
         app:layout_constraintDimensionRatio="4:3"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent">
+
+        <TextureView
+            android:id="@+id/texture_view"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+    </FrameLayout>
 
     <ScrollView
         android:id="@+id/event_scroll"
@@ -24,7 +33,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/texture_view">
+        app:layout_constraintTop_toBottomOf="@id/video_container">
 
         <TextView
             android:id="@+id/event_log"

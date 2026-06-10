@@ -1641,7 +1641,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                         mNotSupportedAudioCB = true;
                         if (rr != null) {
                             Bundle data = new Bundle();
-                            data.putInt("code",904);
+                            data.putInt("code",905);
                             data.putString("msg","不支持该音频格式");
                             rr.send(0, data);
                         }

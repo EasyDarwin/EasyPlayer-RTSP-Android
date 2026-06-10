@@ -17,10 +17,19 @@ import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
+    /** 播放开始后多久自动销毁 client（毫秒） */
+    private static final long DESTROY_DELAY_MS = 10*60_000;
+
     private EasyPlayerClient client;
     private TextView eventLog;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault());
+    private final Runnable destroyClientRunnable = new Runnable() {
+        @Override
+        public void run() {
+            destroyClient("定时到达，自动停止播放");
+        }
+    };
 
     protected static final String TAG = "SimplePlayer";
 
@@ -30,6 +39,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         TextureView textureView = findViewById(R.id.texture_view);
+        textureView.setOpaque(true);
         eventLog = findViewById(R.id.event_log);
 
         /**
@@ -45,9 +55,11 @@ public class MainActivity extends AppCompatActivity {
          *   900 视频分辨率
          *   901 解码方式
          *   902 首帧时间
+         *   903 解码失败
+         *   904 不支持该编码
+         *   905 不支持该音频格式
          *
          */
-
 
         ResultReceiver mResultReceiver = new ResultReceiver(new Handler()) {
             @Override
@@ -66,7 +78,30 @@ public class MainActivity extends AppCompatActivity {
         client = new EasyPlayerClient(this, textureView, mResultReceiver, null, null);
         client.play("rtsp://admin:xf1234567@192.168.1.120:554/Streaming/Channels/101");
         appendEvent("开始播放...");
+        scheduleDestroyClient();
+    }
 
+    private void scheduleDestroyClient() {
+        mainHandler.removeCallbacks(destroyClientRunnable);
+        mainHandler.postDelayed(destroyClientRunnable, DESTROY_DELAY_MS);
+        appendEvent("将在 " + (DESTROY_DELAY_MS / 1000) + " 秒后自动停止播放");
+    }
+
+    private void destroyClient(String reason) {
+        mainHandler.removeCallbacks(destroyClientRunnable);
+        if (client == null) {
+            return;
+        }
+        client.stop();
+        client = null;
+        Log.i(TAG, reason);
+        appendEvent(reason);
+    }
+
+    @Override
+    protected void onDestroy() {
+        destroyClient("Activity 销毁，停止播放");
+        super.onDestroy();
     }
 
     private void appendEvent(final String line) {
