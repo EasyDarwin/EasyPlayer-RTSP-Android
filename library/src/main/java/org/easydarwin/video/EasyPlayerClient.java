@@ -482,49 +482,39 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     }
 
     private void sendFirstFrameTTFF(int decodeType) {
-        if (mFirstFrameTTFFSent) {
-            return;
-        }
+        if (mFirstFrameTTFFSent) return;
         mFirstFrameTTFFSent = true;
         ResultReceiver rr = mRR;
-        if (rr == null) {
-            return;
-        }
+        if (rr == null)  return;
         long ttffMs = SystemClock.elapsedRealtime() - mPlayStartElapsedMs;
         Bundle data = new Bundle();
-        data.putInt("code",101);
+        data.putInt("code",902);
         data.putLong("data",ttffMs);
         data.putString("msg",String.format("首帧时间: %d ms", ttffMs));
         Log.i(TAG, String.format("first frame TTFF: %d ms, decodeType: %d", ttffMs, decodeType));
         rr.send(0, data);
-
-
-
     }
 
     private void handleDecodeType(int decodeType) {
         ResultReceiver rr = mRR;
         if (rr == null)  return;
         Bundle data = new Bundle();
-        data.putInt("code",101);
+        data.putInt("code",901);
         data.putLong("data",decodeType);
         data.putString("msg",String.format("解码方式: %s", decodeType==0?"软解":"硬解"));
         rr.send(0, data);
     }
 
     private void sendVideoDecodeFailed(String reason) {
-        if (mDecodeFailedSent) {
-            return;
-        }
+        if (mDecodeFailedSent)  return;
         mDecodeFailedSent = true;
         ResultReceiver rr = mRR;
-        if (rr == null) {
-            return;
-        }
+        if (rr == null)   return;
         Bundle data = new Bundle();
-        data.putString(KEY_DECODE_ERROR_MSG, reason);
+        data.putInt("code",903);
+        data.putString("msg", reason);
         Log.e(TAG, "video decode failed: " + reason);
-        rr.send(RESULT_VIDEO_DECODE_FAILED, data);
+        rr.send(0, data);
     }
 
     private VideoCodec.VideoDecoderLite tryCreateSoftDecoder(Object surface, boolean h264, String failReason) {
@@ -1042,7 +1032,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
                                 mCodec = codec;
                                 if (i420callback != null) {
-                                    final VideoCodec.VideoDecoderLite decoder = tryCreateSoftDecoder(mSurface, frameInfo.codec == EASY_SDK_VIDEO_CODEC_H264, "display decoder init failed");
+                                    final VideoCodec.VideoDecoderLite decoder = tryCreateSoftDecoder(mSurface, frameInfo.codec == EASY_SDK_VIDEO_CODEC_H264, "解码器初始化失败");
                                     displayer = decoder;
                                 }
                             } catch (Throwable e) {
@@ -1130,7 +1120,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                     } else if (previousStampUs == 0l) {
                                         softDecodeFailCount++;
                                         if (softDecodeFailCount >= SOFT_DECODE_FAIL_THRESHOLD) {
-                                            sendVideoDecodeFailed("soft decode failed: consecutive decode errors before first frame");
+                                            sendVideoDecodeFailed("软解码失败");
                                         }
                                     }
 
@@ -1522,13 +1512,15 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         }
         if (_frameType == Client.EASY_SDK_VIDEO_FRAME_FLAG) {
             //Log.d(TAG,String.format("receive video frame"));
-
             //处理视频数据
             if (frameInfo.codec != EASY_SDK_VIDEO_CODEC_H264 && frameInfo.codec != EASY_SDK_VIDEO_CODEC_H265) {
                 ResultReceiver rr = mRR;
                 if (!mNotSupportedVideoCB && rr != null) {
                     mNotSupportedVideoCB = true;
-                    rr.send(RESULT_UNSUPPORTED_VIDEO, null);
+                    Bundle data = new Bundle();
+                    data.putInt("code",904);
+                    data.putString("msg","不支持该编码");
+                    rr.send(0, data);
                 }
                 return;
             }
@@ -1562,17 +1554,13 @@ public class EasyPlayerClient implements Client.SourceCallBack {
             mNewestStample = frameInfo.stamp;
             frameInfo.audio = false;
             if (mWaitingKeyFrame) {
-
                 ResultReceiver rr = mRR;
                 mWidth = frameInfo.width;
                 mHeight = frameInfo.height;
                 Bundle data = new Bundle();
-                data.putInt("code", 100);
-                data.putString("msg", "分辨率:"+mWidth+"x"+mHeight);
-                Log.i(TAG, String.format("RESULT_VIDEO_SIZE:%d*%d", frameInfo.width, frameInfo.height));
+                data.putInt("code", 900);
+                data.putString("msg", String.format("分辨率 :%d x %d ;",mWidth,mHeight));
                 if (rr != null) rr.send(0, data);
-
-
                 Log.i(TAG, String.format("width:%d,height:%d", mWidth, mHeight));
 
                 if (frameInfo.codec == EASY_SDK_VIDEO_CODEC_H264) {
@@ -1623,14 +1611,19 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                 if (width != 0 && height != 0) if (width != mWidth || height != mHeight) {
                     // resolution change...
                     ResultReceiver rr = mRR;
-                    Bundle bundle = new Bundle();
-                    bundle.putInt(EXTRA_VIDEO_WIDTH, frameInfo.width);
-                    bundle.putInt(EXTRA_VIDEO_HEIGHT, frameInfo.height);
+                    Bundle data = new Bundle();
+                    data.putInt("code", 9003);
+                    data.putString("msg",String.format("变化后的宽高:%dx%d",frameInfo.width,frameInfo.height));
                     mWidth = frameInfo.width;
                     mHeight = frameInfo.height;
                     Log.i(TAG, String.format("RESULT_VIDEO_SIZE:%d*%d", frameInfo.width, frameInfo.height));
-                    if (rr != null) rr.send(RESULT_VIDEO_SIZE, bundle);
+
+                    if (rr != null) rr.send(0, data);
                 }
+
+
+
+
             }
 //            Log.d(TAG, String.format("queue size :%d", mQueue.size()));
             try {
@@ -1647,9 +1640,10 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                     if (!mNotSupportedAudioCB && rr != null) {
                         mNotSupportedAudioCB = true;
                         if (rr != null) {
-                            rr.send(RESULT_UNSUPPORTED_AUDIO, null);
-
-
+                            Bundle data = new Bundle();
+                            data.putInt("code",904);
+                            data.putString("msg","不支持该音频格式");
+                            rr.send(0, data);
                         }
                     }
                     return;
@@ -1663,12 +1657,15 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                 e.printStackTrace();
             }
         } else if (_frameType == 0) {
-            // time out...
             if (!mTimeout) {
                 mTimeout = true;
-
                 ResultReceiver rr = mRR;
-                if (rr != null) rr.send(RESULT_TIMEOUT, null);
+                if (rr != null){
+                    Bundle data = new Bundle();
+                    data.putInt("code",9);
+                    data.putString("msg","超时");
+                    rr.send(0, data);
+                }
             }
         } else if (_frameType == Client.EASY_SDK_EVENT_FRAME_FLAG) {
             ResultReceiver rr = mRR;
@@ -1683,34 +1680,26 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         mMediaInfo = mi;
         Log.i(TAG, String.format("MediaInfo fetchd\n%s", mi));
     }
-
-//    RTSP_CLIENT_STATUS_NO                     0x00,
-//    RTSP CLIENT STATUS CONNECTING             0x01  连接中
-//    RTSP CLIENT STATUS ERROR,                 0x02  服务端返回错误
-//    RTSP CLIENT STATUS CONNECTED,             0x03  连接成功
-//    RTSP_CLIENT_STATUS CONNECT_FAIL,          0x04  连接失败
-//    RTSP_CLIENT_STATUS_ CHANGE_RESOLUTION,    0x05  切换分辨率
-//    RTSP_CLIENT_STATUS_STREAM ABORT           0x06  流中断
-//    RTSP_CLIENT_STATUS_RECONNECTING,          0x07  重连中
-//    RTSP_CLIENT_STATUS_EXIT                   0x08  连接退出
-
-
     @Override
     public void onEvent(int channel, int err, int info, String msg) {
         Log.d("SimplePlayer  ====", "err=" + err + ",info=" + info + ",msg = " + msg);
         ResultReceiver rr = mRR;
         Bundle data = new Bundle();
-        if (err != 0) {
+        if (err != 0 ) {
             data.putInt("code", err);
             data.putString("msg", msg);
         } else {
             data.putInt("code", info);
             switch (info) {
                 case 0:
-                    data.putString("msg", "连接中");
+                    data.putString("msg", "请求链接");
                     break;
                 case 1:
                     data.putString("msg", "连接中");
+                    break;
+                case 2:
+                    data.putInt("code", err);
+                    data.putString("msg", msg);
                     break;
                 case 3:
                     data.putString("msg", "连接成功");
@@ -1728,13 +1717,19 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                     data.putString("msg", "重连中");
                     break;
                 case 8:
+                    data.putString("msg", "无数据");
+                    break;
+                case 9:
+                    data.putString("msg", "超时");
+                    break;
+                case 10:
                     data.putString("msg", "连接退出");
                     break;
                 default:
                     data.putString("msg", "");
             }
         }
-        if (rr != null && data.getInt("code")!=0) rr.send(RESULT_EVENT, data);
+        if (rr != null ) rr.send(0, data);
     }
 
     @Override

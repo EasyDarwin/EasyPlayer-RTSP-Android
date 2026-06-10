@@ -114,7 +114,7 @@ public class Client implements Closeable {
 
         void onMediaInfoCallBack(int _channelId, MediaInfo mi);
 
-        void onEvent(int _channelId, int err, int info,String msg);
+        void onEvent(int _channelId, int err, int info, String msg);
 
         void sendSeiData(byte[] sei);
     }
@@ -315,12 +315,14 @@ public class Client implements Closeable {
         buffer.getInt();
         buffer.getInt();
         buffer.getShort();
-        fi.sample_rate = buffer.getInt();
+        fi.sample_rate = buffer.getInt();  // 首帧 1
         fi.channels = buffer.getInt();
         fi.bits_per_sample = buffer.getInt();
         fi.length = buffer.getInt();
         fi.timestamp_usec = buffer.getInt();
         fi.timestamp_sec = buffer.getInt();
+
+//        Log.d("FrameInfo", String.format("首帧：%d  ,channels:%d ,bits_per_sample:%d,length:%d", fi.sample_rate,fi.channels,fi.bits_per_sample,fi.length ));
 
         long sec = fi.timestamp_sec < 0 ? Integer.MAX_VALUE - Integer.MIN_VALUE + 1 + fi.timestamp_sec : fi.timestamp_sec;
         long usec = fi.timestamp_usec < 0 ? Integer.MAX_VALUE - Integer.MIN_VALUE + 1 + fi.timestamp_usec : fi.timestamp_usec;
@@ -343,11 +345,11 @@ public class Client implements Closeable {
         }
     }
 
-    private static void onEvent(int channel, int err, int state,String msg) {
+    private static void onEvent(int channel, int err, int state, String msg) {
         synchronized (sCallbacks) {
             final SourceCallBack callBack = sCallbacks.get(channel);
             if (callBack != null) {
-                callBack.onEvent(channel, err, state,msg);
+                callBack.onEvent(channel, err, state, msg);
             }
         }
     }

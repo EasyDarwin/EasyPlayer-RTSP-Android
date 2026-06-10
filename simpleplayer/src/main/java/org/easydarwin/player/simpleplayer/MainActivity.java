@@ -32,6 +32,23 @@ public class MainActivity extends AppCompatActivity {
         TextureView textureView = findViewById(R.id.texture_view);
         eventLog = findViewById(R.id.event_log);
 
+        /**
+         * 1 连接中
+         * 3 连接成功
+         * 4  连接失败
+         * 5  切换分辨率
+         * 6  流中断
+         * 7  重连中
+         * 8  无数据
+         * 9  超时
+         * 10 连接退出
+         *   900 视频分辨率
+         *   901 解码方式
+         *   902 首帧时间
+         *
+         */
+
+
         ResultReceiver mResultReceiver = new ResultReceiver(new Handler()) {
             @Override
             protected void onReceiveResult(int code, Bundle data) {
@@ -40,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.i(TAG, "onReceiveResult: " + data.toString());
                     int mCode = data.getInt("code");
                     String msg = data.getString("msg");
-                    String line = String.format("code:%d , msg: %s",mCode,msg);
+                    String line = String.format("code:%d  msg: %s",mCode,msg);
                     appendEvent(line);
                 }
             }
