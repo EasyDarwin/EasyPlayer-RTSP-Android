@@ -71,18 +71,41 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     public static final int EASY_SDK_AUDIO_CODEC_G726 = 0x1100B;    /* G726 */
 
     /**
-     * 表示视频显示出来了
+     * @deprecated 请使用 {@link #RESULT_FIRST_FRAME_TTFF}
      */
     public static final int RESULT_VIDEO_DISPLAYED = 01;
 
     /**
-     * 表示视频的解码方式
+     * 视频解码失败，Bundle 携带 {@link #KEY_DECODE_ERROR_MSG}
+     */
+    public static final int RESULT_VIDEO_DECODE_FAILED = 98;
+
+    /**
+     * 首帧已显示，Bundle 携带 {@link #KEY_TTFF_MS} 与 {@link #KEY_VIDEO_DECODE_TYPE}
+     */
+    public static final int RESULT_FIRST_FRAME_TTFF = 99;
+
+    /**
+     * 首帧显示耗时（毫秒），自 {@link #start} / {@link #play} 调用起算
+     */
+    public static final String KEY_TTFF_MS = "ttff-ms";
+
+    /**
+     * 解码失败原因
+     */
+    public static final String KEY_DECODE_ERROR_MSG = "decode-error-msg";
+
+    /**
+     * 表示视频的解码方式：0 软解 / 1 硬解
      */
     public static final String KEY_VIDEO_DECODE_TYPE = "video-decode-type";
+
+    private static final int SOFT_DECODE_FAIL_THRESHOLD = 30;
 
     /**
      * 表示视频的尺寸获取到了。具体尺寸见 EXTRA_VIDEO_WIDTH、EXTRA_VIDEO_HEIGHT
      */
+
     public static final int RESULT_VIDEO_SIZE = 02;
 
     public static final int RESULT_TIMEOUT = 03;
@@ -299,6 +322,9 @@ public class EasyPlayerClient implements Client.SourceCallBack {
      */
     private volatile long mNewestStample;
     private boolean mWaitingKeyFrame;
+    private long mPlayStartElapsedMs;
+    private volatile boolean mFirstFrameTTFFSent;
+    private volatile boolean mDecodeFailedSent;
     private boolean mTimeout;
     private boolean mNotSupportedVideoCB, mNotSupportedAudioCB;
 
@@ -433,6 +459,9 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         }
         if (type == 0) type = TRANSTYPE_TCP;
         mNewestStample = 0;
+        mPlayStartElapsedMs = SystemClock.elapsedRealtime();
+        mFirstFrameTTFFSent = false;
+        mDecodeFailedSent = false;
         mWaitingKeyFrame = PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("waiting_i_frame", true);
         mWidth = mHeight = 0;
         mQueue.clear();
@@ -450,6 +479,61 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
     public boolean isAudioEnable() {
         return mAudioEnable;
+    }
+
+    private void sendFirstFrameTTFF(int decodeType) {
+        if (mFirstFrameTTFFSent) {
+            return;
+        }
+        mFirstFrameTTFFSent = true;
+        ResultReceiver rr = mRR;
+        if (rr == null) {
+            return;
+        }
+        long ttffMs = SystemClock.elapsedRealtime() - mPlayStartElapsedMs;
+        Bundle data = new Bundle();
+        data.putInt("code",101);
+        data.putLong("data",ttffMs);
+        data.putString("msg",String.format("首帧时间: %d ms", ttffMs));
+        Log.i(TAG, String.format("first frame TTFF: %d ms, decodeType: %d", ttffMs, decodeType));
+        rr.send(0, data);
+
+
+
+    }
+
+    private void handleDecodeType(int decodeType) {
+        ResultReceiver rr = mRR;
+        if (rr == null)  return;
+        Bundle data = new Bundle();
+        data.putInt("code",101);
+        data.putLong("data",decodeType);
+        data.putString("msg",String.format("解码方式: %s", decodeType==0?"软解":"硬解"));
+        rr.send(0, data);
+    }
+
+    private void sendVideoDecodeFailed(String reason) {
+        if (mDecodeFailedSent) {
+            return;
+        }
+        mDecodeFailedSent = true;
+        ResultReceiver rr = mRR;
+        if (rr == null) {
+            return;
+        }
+        Bundle data = new Bundle();
+        data.putString(KEY_DECODE_ERROR_MSG, reason);
+        Log.e(TAG, "video decode failed: " + reason);
+        rr.send(RESULT_VIDEO_DECODE_FAILED, data);
+    }
+
+    private VideoCodec.VideoDecoderLite tryCreateSoftDecoder(Object surface, boolean h264, String failReason) {
+        VideoCodec.VideoDecoderLite decoder = new VideoCodec.VideoDecoderLite();
+        if (!decoder.create(surface, h264)) {
+            sendVideoDecodeFailed(failReason);
+            return null;
+        }
+        return decoder;
     }
 
     public void setAudioEnable(boolean enable) {
@@ -594,10 +678,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                         }
                         mAudioTrack.play();
                         handle = AudioCodec.create(frameInfo.codec, frameInfo.sample_rate, frameInfo.channels, frameInfo.bits_per_sample);
-
-                        Log.w(TAG, String.format("POST VIDEO_DISPLAYED IN AUDIO THREAD!!!"));
-                        ResultReceiver rr = mRR;
-                        if (rr != null) rr.send(RESULT_VIDEO_DISPLAYED, null);
 
                         // 半秒钟的数据缓存
                         byte[] mBufferReuse = new byte[16000];
@@ -872,6 +952,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
                     int frameWidth = 0;
                     int frameHeight = 0;
+                    int softDecodeFailCount = 0;
 //
 //                    long decodeBegin = 0;
 //                    long current = 0;
@@ -892,9 +973,13 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                             try {
                                 //软解 解码
                                 if (PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("use-sw-codec", true)) {
-                                    throw new IllegalStateException("user set sw codec");
+                                    Log.d(TAG,"走软解");
+                                    handleDecodeType(0);
                                     //直接走软解
+                                    throw new IllegalStateException("user set sw codec");
                                 }
+
+                                handleDecodeType(1);
 
                                 final String mime = frameInfo.codec == EASY_SDK_VIDEO_CODEC_H264 ? "video/avc" : "video/hevc";
                                 MediaFormat format = MediaFormat.createVideoFormat(mime, mWidth, mHeight);
@@ -957,8 +1042,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
                                 mCodec = codec;
                                 if (i420callback != null) {
-                                    final VideoCodec.VideoDecoderLite decoder = new VideoCodec.VideoDecoderLite();
-                                    decoder.create(mSurface, frameInfo.codec == EASY_SDK_VIDEO_CODEC_H264);
+                                    final VideoCodec.VideoDecoderLite decoder = tryCreateSoftDecoder(mSurface, frameInfo.codec == EASY_SDK_VIDEO_CODEC_H264, "display decoder init failed");
                                     displayer = decoder;
                                 }
                             } catch (Throwable e) {
@@ -977,9 +1061,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                 Log.e(TAG, String.format("init codec error due to %s", e.getMessage()));
                                 e.printStackTrace();
 
-                                final VideoCodec.VideoDecoderLite decoder = new VideoCodec.VideoDecoderLite();
-                                decoder.create(mSurface, frameInfo.codec == EASY_SDK_VIDEO_CODEC_H264);
-                                mDecoder = decoder;
+                                mDecoder = tryCreateSoftDecoder(mSurface, frameInfo.codec == EASY_SDK_VIDEO_CODEC_H264, "hard decode init failed, soft decode init failed: " + e.getMessage());
                             }
 
 //                            previewTickUs = mTexture.getTimestamp();
@@ -999,7 +1081,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                         }
 
                         if (frameInfo != null) {
-                            Log.d(TAG, "video " + frameInfo.stamp + " take[" + (frameInfo.stamp - lastFrameStampUs) + "]");
+//                            Log.d(TAG, "video " + frameInfo.stamp + " take[" + (frameInfo.stamp - lastFrameStampUs) + "]");
                             //处理分辨率变化 重新初始化 mCodec
                             if (frameHeight != 0 && frameWidth != 0) {
                                 if (frameInfo.width != 0 && frameInfo.height != 0) {
@@ -1035,21 +1117,20 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                         i420callback.onI420Data(buf);
                                     }
 
-                                    if (buf != null) {
-                                        mDecoder.releaseBuffer(buf);
-                                        Log.i(TAG, "AAAA 1022 releaseBuffer ");
-                                    }
-
                                     long decodeSpend = SystemClock.elapsedRealtime() - decodeBegin;
 
-                                    boolean firstFrame = previousStampUs == 0l;
-                                    if (firstFrame) {
-                                        Log.i(TAG, String.format("POST VIDEO_DISPLAYED!!!"));
-                                        ResultReceiver rr = mRR;
-                                        if (rr != null) {
-                                            Bundle data = new Bundle();
-                                            data.putInt(KEY_VIDEO_DECODE_TYPE, 0);
-                                            rr.send(RESULT_VIDEO_DISPLAYED, data);
+                                    if (buf != null) {
+                                        mDecoder.releaseBuffer(buf);
+//                                        Log.i(TAG, "AAAA 1022 releaseBuffer ");
+                                        softDecodeFailCount = 0;
+                                        if (previousStampUs == 0l) {
+                                            sendFirstFrameTTFF(0);
+                                        }
+                                        previousStampUs = frameInfo.stamp;
+                                    } else if (previousStampUs == 0l) {
+                                        softDecodeFailCount++;
+                                        if (softDecodeFailCount >= SOFT_DECODE_FAIL_THRESHOLD) {
+                                            sendVideoDecodeFailed("soft decode failed: consecutive decode errors before first frame");
                                         }
                                     }
 
@@ -1071,7 +1152,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                             Log.d(TAG, "cache:" + cache);
                                         }
                                     }
-                                    previousStampUs = frameInfo.stamp;
                                 }
                             } else {
                                 // 走软硬解码
@@ -1213,13 +1293,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                                 }
 
                                                 if (firstTime) {
-                                                    Log.i(TAG, String.format("POST VIDEO_DISPLAYED!!!"));
-                                                    ResultReceiver rr = mRR;
-                                                    if (rr != null) {
-                                                        Bundle data = new Bundle();
-                                                        data.putInt(KEY_VIDEO_DECODE_TYPE, 1);
-                                                        rr.send(RESULT_VIDEO_DISPLAYED, data);
-                                                    }
+                                                    sendFirstFrameTTFF(1);
                                                 }
                                                 previousStampUs = info.presentationTimeUs;
                                         }
@@ -1241,9 +1315,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                     }
                                     displayer = null;
 
-                                    final VideoCodec.VideoDecoderLite decoder = new VideoCodec.VideoDecoderLite();
-                                    decoder.create(mSurface, initFrameInfo.codec == EASY_SDK_VIDEO_CODEC_H264);
-                                    mDecoder = decoder;
+                                    mDecoder = tryCreateSoftDecoder(mSurface, initFrameInfo.codec == EASY_SDK_VIDEO_CODEC_H264, "hard decode runtime failed, soft decode init failed: " + ex.getMessage());
                                     continue;
                                 }
 
@@ -1483,7 +1555,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 //            }
 
             if (frameInfo.type == 1) {
-                Log.i(TAG, String.format("recv I frame"));
+//                Log.i(TAG, String.format("recv I frame"));
             }
 
 //            boolean firstFrame = mNewestStample == 0;
@@ -1492,13 +1564,13 @@ public class EasyPlayerClient implements Client.SourceCallBack {
             if (mWaitingKeyFrame) {
 
                 ResultReceiver rr = mRR;
-                Bundle bundle = new Bundle();
-                bundle.putInt(EXTRA_VIDEO_WIDTH, frameInfo.width);
-                bundle.putInt(EXTRA_VIDEO_HEIGHT, frameInfo.height);
                 mWidth = frameInfo.width;
                 mHeight = frameInfo.height;
+                Bundle data = new Bundle();
+                data.putInt("code", 100);
+                data.putString("msg", "分辨率:"+mWidth+"x"+mHeight);
                 Log.i(TAG, String.format("RESULT_VIDEO_SIZE:%d*%d", frameInfo.width, frameInfo.height));
-                if (rr != null) rr.send(RESULT_VIDEO_SIZE, bundle);
+                if (rr != null) rr.send(0, data);
 
 
                 Log.i(TAG, String.format("width:%d,height:%d", mWidth, mHeight));
@@ -1576,6 +1648,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                         mNotSupportedAudioCB = true;
                         if (rr != null) {
                             rr.send(RESULT_UNSUPPORTED_AUDIO, null);
+
+
                         }
                     }
                     return;
@@ -1610,49 +1684,57 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         Log.i(TAG, String.format("MediaInfo fetchd\n%s", mi));
     }
 
+//    RTSP_CLIENT_STATUS_NO                     0x00,
+//    RTSP CLIENT STATUS CONNECTING             0x01  连接中
+//    RTSP CLIENT STATUS ERROR,                 0x02  服务端返回错误
+//    RTSP CLIENT STATUS CONNECTED,             0x03  连接成功
+//    RTSP_CLIENT_STATUS CONNECT_FAIL,          0x04  连接失败
+//    RTSP_CLIENT_STATUS_ CHANGE_RESOLUTION,    0x05  切换分辨率
+//    RTSP_CLIENT_STATUS_STREAM ABORT           0x06  流中断
+//    RTSP_CLIENT_STATUS_RECONNECTING,          0x07  重连中
+//    RTSP_CLIENT_STATUS_EXIT                   0x08  连接退出
+
+
     @Override
-    public void onEvent(int channel, int err, int info) {
+    public void onEvent(int channel, int err, int info, String msg) {
+        Log.d("SimplePlayer  ====", "err=" + err + ",info=" + info + ",msg = " + msg);
         ResultReceiver rr = mRR;
-        Bundle resultData = new Bundle();
-        /*
-            int state = 0;
-        int err = EasyRTSP_GetErrCode(fRTSPHandle);
-		// EasyRTSPClient开始进行连接，建立EasyRTSPClient连接线程
-		if (NULL == _pBuf && NULL == _frameInfo)
-		{
-			LOGD("Recv Event: Connecting...");
-			state = 1;
-		}
-
-		// EasyPlayerClient RTSPClient连接错误，错误码通过EasyRTSP_GetErrCode()接口获取，比如404
-		else if (NULL != _frameInfo && _frameInfo->codec == EASY_SDK_EVENT_CODEC_ERROR)
-		{
-			LOGD("Recv Event: Error:%d ...\n", err);
-			state = 2;
-		}
-
-		// EasyRTSPClient连接线程退出，此时上层应该停止相关调用，复位连接按钮等状态
-		else if (NULL != _frameInfo && _frameInfo->codec == EASY_SDK_EVENT_CODEC_EXIT)
-		{
-			LOGD("Recv Event: Exit,Error:%d ...", err);
-			state = 3;
-		}
-
-        * */
-        switch (info) {
-            case 1:
-                resultData.putString("event-msg", "连接中...");
-                break;
-            case 2:
-                resultData.putInt("errorcode", err);
-                resultData.putString("event-msg", String.format("错误：%d", err));
-                break;
-            case 3:
-                resultData.putInt("errorcode", err);
-                resultData.putString("event-msg", String.format("线程退出。%d", err));
-                break;
+        Bundle data = new Bundle();
+        if (err != 0) {
+            data.putInt("code", err);
+            data.putString("msg", msg);
+        } else {
+            data.putInt("code", info);
+            switch (info) {
+                case 0:
+                    data.putString("msg", "连接中");
+                    break;
+                case 1:
+                    data.putString("msg", "连接中");
+                    break;
+                case 3:
+                    data.putString("msg", "连接成功");
+                    break;
+                case 4:
+                    data.putString("msg", "连接失败");
+                    break;
+                case 5:
+                    data.putString("msg", "切换分辨率");
+                    break;
+                case 6:
+                    data.putString("msg", "流中断");
+                    break;
+                case 7:
+                    data.putString("msg", "重连中");
+                    break;
+                case 8:
+                    data.putString("msg", "连接退出");
+                    break;
+                default:
+                    data.putString("msg", "");
+            }
         }
-        if (rr != null) rr.send(RESULT_EVENT, resultData);
+        if (rr != null && data.getInt("code")!=0) rr.send(RESULT_EVENT, data);
     }
 
     @Override

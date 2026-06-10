@@ -70,13 +70,18 @@ public class VideoCodec {
         private int[] mSize;
         private Object surface;
 
-        public void create(Object surface, boolean h264) {
+        public boolean create(Object surface, boolean h264) {
 //            if (surface == null) {
 //                throw new NullPointerException("surface is null!");
 //            }
             this.surface = surface;
-            decoder_create(surface, h264 ? 0 : 1);
+            int ret = decoder_create(surface, h264 ? 0 : 1);
             mSize = new int[2];
+            return ret == 0;
+        }
+
+        public boolean isInitialized() {
+            return mHandle != 0;
         }
 
         public void close() {

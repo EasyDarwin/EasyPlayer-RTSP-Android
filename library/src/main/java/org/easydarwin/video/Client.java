@@ -114,7 +114,7 @@ public class Client implements Closeable {
 
         void onMediaInfoCallBack(int _channelId, MediaInfo mi);
 
-        void onEvent(int _channelId, int err, int info);
+        void onEvent(int _channelId, int err, int info,String msg);
 
         void sendSeiData(byte[] sei);
     }
@@ -134,7 +134,7 @@ public class Client implements Closeable {
     public static final int TRANSTYPE_TCP = 1;
     public static final int TRANSTYPE_UDP = 2;
 
-    private static final String TAG = Client.class.getSimpleName();
+    private static final String TAG = "RTSPClientCallBack";
 
     static {
         System.loadLibrary("EasyRTSPClient");
@@ -343,15 +343,11 @@ public class Client implements Closeable {
         }
     }
 
-    private static void onEvent(int channel, int err, int state) {
-        // state：1 Connecting, 2 连接错误, 3 连接线程退出
-        // err的含义：http请求的返回码（200，400，401等等）
-        Log.e(TAG, String.format("__RTSPClientCallBack onEvent: err=%d, state=%d", err, state));
-
+    private static void onEvent(int channel, int err, int state,String msg) {
         synchronized (sCallbacks) {
             final SourceCallBack callBack = sCallbacks.get(channel);
             if (callBack != null) {
-                callBack.onEvent(channel, err, state);
+                callBack.onEvent(channel, err, state,msg);
             }
         }
     }
