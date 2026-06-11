@@ -7,6 +7,8 @@ import android.os.ResultReceiver;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.TextureView;
+import android.view.View;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import org.easydarwin.video.EasyPlayerClient;
@@ -21,6 +23,7 @@ public class MainActivity extends AppCompatActivity {
     private static final long DESTROY_DELAY_MS = 10*60_000;
 
     private EasyPlayerClient client;
+    private ScrollView eventScroll;
     private TextView eventLog;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault());
@@ -40,6 +43,7 @@ public class MainActivity extends AppCompatActivity {
 
         TextureView textureView = findViewById(R.id.texture_view);
         textureView.setOpaque(true);
+        eventScroll = findViewById(R.id.event_scroll);
         eventLog = findViewById(R.id.event_log);
 
         /**
@@ -113,6 +117,16 @@ public class MainActivity extends AppCompatActivity {
             public void run() {
                 String entry = timeFormat.format(new Date()) + "  " + line + "\n";
                 eventLog.append(entry);
+                scrollEventLogToBottom();
+            }
+        });
+    }
+
+    private void scrollEventLogToBottom() {
+        eventScroll.post(new Runnable() {
+            @Override
+            public void run() {
+                eventScroll.fullScroll(View.FOCUS_DOWN);
             }
         });
     }
