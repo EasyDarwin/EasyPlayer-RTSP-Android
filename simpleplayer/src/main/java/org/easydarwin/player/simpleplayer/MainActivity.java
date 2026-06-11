@@ -9,6 +9,7 @@ import android.util.Log;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -26,6 +27,7 @@ public class MainActivity extends AppCompatActivity {
     private EasyPlayerClient rtspPlayer;
     private TextureView textureView;
     private Button btnPlayToggle;
+    private ProgressBar loadingBar;
     private ScrollView eventScroll;
     private TextView eventLog;
     private ResultReceiver resultReceiver;
@@ -43,6 +45,7 @@ public class MainActivity extends AppCompatActivity {
         // TextureView 不支持 background，黑底由布局 video_container 提供；opaque 避免未出画面前透底
         textureView.setOpaque(true);
         btnPlayToggle = findViewById(R.id.btn_play_toggle);
+        loadingBar = findViewById(R.id.loading);
         eventScroll = findViewById(R.id.event_scroll);
         eventLog = findViewById(R.id.event_log);
 
@@ -64,7 +67,7 @@ public class MainActivity extends AppCompatActivity {
          * 904  不支持该视频编码
          * 905  不支持该音频格式
          * 906  重连耗时（data=毫秒，count=第几次重连）
-         * 907  播放成功率（仅成功时回调，data=成功率%，count=成功次数，total=总尝试次数）
+         * 907  播放成功率（仅成功时回调，data=成功率%，count=成功次数，total=总尝试次数；收到后隐藏加载动画）
          */
         resultReceiver = new ResultReceiver(new Handler()) {
             @Override
@@ -74,6 +77,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.i(TAG, "onReceiveResult: " + data.toString());
                     int mCode = data.getInt("code");
                     String msg = data.getString("msg");
+                    if (mCode == 907)  hideLoading();
                     appendEvent(String.format("code:%d  msg: %s", mCode, msg));
                 }
             }
@@ -106,6 +110,7 @@ public class MainActivity extends AppCompatActivity {
         rtspPlayer = new EasyPlayerClient(this, textureView, false, resultReceiver);
         rtspPlayer.play(RTSP_URL);
         updatePlayButton();
+        showLoading();
         appendEvent("开始播放...");
     }
 
@@ -115,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
         }
         rtspPlayer.stop();
         rtspPlayer = null;
+        hideLoading();
         updatePlayButton();
         Log.i(TAG, reason);
         appendEvent(reason);
@@ -150,6 +156,24 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void run() {
                 eventScroll.fullScroll(View.FOCUS_DOWN);
+            }
+        });
+    }
+
+    private void showLoading() {
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                loadingBar.setVisibility(View.VISIBLE);
+            }
+        });
+    }
+
+    private void hideLoading() {
+        mainHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                loadingBar.setVisibility(View.GONE);
             }
         });
     }
