@@ -40,11 +40,32 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         textureView = findViewById(R.id.texture_view);
+        // TextureView 不支持 background，黑底由布局 video_container 提供；opaque 避免未出画面前透底
         textureView.setOpaque(true);
         btnPlayToggle = findViewById(R.id.btn_play_toggle);
         eventScroll = findViewById(R.id.event_scroll);
         eventLog = findViewById(R.id.event_log);
 
+        /**
+         * ResultReceiver 回调 code 说明：
+         * 1  连接中
+         * 3  连接成功
+         * 4  连接失败
+         * 5  切换分辨率
+         * 6  流中断
+         * 7  重连中
+         * 8  无数据
+         * 9  超时
+         * 10   连接退出
+         * 900  视频分辨率
+         * 901  解码方式
+         * 902  首帧时间（data=毫秒）
+         * 903  解码失败
+         * 904  不支持该视频编码
+         * 905  不支持该音频格式
+         * 906  重连耗时（data=毫秒，count=第几次重连）
+         * 907  播放成功率（仅成功时回调，data=成功率%，count=成功次数，total=总尝试次数）
+         */
         resultReceiver = new ResultReceiver(new Handler()) {
             @Override
             protected void onReceiveResult(int code, Bundle data) {
@@ -76,6 +97,12 @@ public class MainActivity extends AppCompatActivity {
         if (rtspPlayer != null) {
             return;
         }
+        /**
+         * @param Context        上下文
+         * @param TextureView    画布
+         * @param software       true=软解，false=硬解
+         * @param ResultReceiver 消息回调
+         */
         rtspPlayer = new EasyPlayerClient(this, textureView, false, resultReceiver);
         rtspPlayer.play(RTSP_URL);
         updatePlayButton();
@@ -93,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
         appendEvent(reason);
     }
 
+    /** 播放中显示「停止播放」，停止后显示「重新播放」 */
     private void updatePlayButton() {
         btnPlayToggle.setText(rtspPlayer != null ? "停止播放" : "重新播放");
     }
