@@ -8,6 +8,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.TextureView;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -19,20 +20,17 @@ import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity {
 
-    /** 播放开始后多久自动销毁 client（毫秒） */
-    private static final long DESTROY_DELAY_MS = 10*60_000;
+    private static final String RTSP_URL =
+            "rtsp://admin:xf1234567@192.168.1.120:554/Streaming/Channels/101";
 
-    private EasyPlayerClient client;
+    private EasyPlayerClient rtspPlayer;
+    private TextureView textureView;
+    private Button btnPlayToggle;
     private ScrollView eventScroll;
     private TextView eventLog;
+    private ResultReceiver resultReceiver;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault());
-    private final Runnable destroyClientRunnable = new Runnable() {
-        @Override
-        public void run() {
-            destroyClient("定时到达，自动停止播放");
-        }
-    };
 
     protected static final String TAG = "SimplePlayer";
 
@@ -41,33 +39,13 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        TextureView textureView = findViewById(R.id.texture_view);
+        textureView = findViewById(R.id.texture_view);
         textureView.setOpaque(true);
+        btnPlayToggle = findViewById(R.id.btn_play_toggle);
         eventScroll = findViewById(R.id.event_scroll);
         eventLog = findViewById(R.id.event_log);
 
-        /**
-         * 1 连接中
-         * 3 连接成功
-         * 4  连接失败
-         * 5  切换分辨率
-         * 6  流中断
-         * 7  重连中
-         * 8  无数据
-         * 9  超时
-         * 10 连接退出
-         *   900 视频分辨率
-         *   901 解码方式
-         *   902 首帧时间
-         *   903 解码失败
-         *   904 不支持该编码
-         *   905 不支持该音频格式
-         *   906 重连耗时（data=毫秒，count=第几次重连）
-         *   907 播放成功率（仅成功时回调，data=成功率%，count=成功次数，total=总尝试次数）
-         *
-         */
-
-        ResultReceiver mResultReceiver = new ResultReceiver(new Handler()) {
+        resultReceiver = new ResultReceiver(new Handler()) {
             @Override
             protected void onReceiveResult(int code, Bundle data) {
                 super.onReceiveResult(code, data);
@@ -75,39 +53,56 @@ public class MainActivity extends AppCompatActivity {
                     Log.i(TAG, "onReceiveResult: " + data.toString());
                     int mCode = data.getInt("code");
                     String msg = data.getString("msg");
-                    String line;
-                    line = String.format("code:%d  msg: %s", mCode, msg);
-                    appendEvent(line);
+                    appendEvent(String.format("code:%d  msg: %s", mCode, msg));
                 }
             }
         };
 
-        client = new EasyPlayerClient(this, textureView, mResultReceiver, null, null);
-        client.play("rtsp://admin:xf1234567@192.168.1.120:554/Streaming/Channels/101");
-        appendEvent("开始播放...");
-        scheduleDestroyClient();
+        btnPlayToggle.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (rtspPlayer != null) {
+                    stopPlayer("手动停止播放");
+                } else {
+                    startPlayer();
+                }
+            }
+        });
+
+        startPlayer();
     }
 
-    private void scheduleDestroyClient() {
-        mainHandler.removeCallbacks(destroyClientRunnable);
-        mainHandler.postDelayed(destroyClientRunnable, DESTROY_DELAY_MS);
-        appendEvent("将在 " + (DESTROY_DELAY_MS / 1000) + " 秒后自动停止播放");
-    }
-
-    private void destroyClient(String reason) {
-        mainHandler.removeCallbacks(destroyClientRunnable);
-        if (client == null) {
+    private void startPlayer() {
+        if (rtspPlayer != null) {
             return;
         }
-        client.stop();
-        client = null;
+        rtspPlayer = new EasyPlayerClient(this, textureView, true, resultReceiver);
+        rtspPlayer.play(RTSP_URL);
+        updatePlayButton();
+        appendEvent("开始播放...");
+    }
+
+    private void stopPlayer(String reason) {
+        if (rtspPlayer == null) {
+            return;
+        }
+        rtspPlayer.stop();
+        rtspPlayer = null;
+        updatePlayButton();
         Log.i(TAG, reason);
         appendEvent(reason);
     }
 
+    private void updatePlayButton() {
+        btnPlayToggle.setText(rtspPlayer != null ? "停止播放" : "重新播放");
+    }
+
     @Override
     protected void onDestroy() {
-        destroyClient("Activity 销毁，停止播放");
+        if (rtspPlayer != null) {
+            rtspPlayer.stop();
+            rtspPlayer = null;
+        }
         super.onDestroy();
     }
 

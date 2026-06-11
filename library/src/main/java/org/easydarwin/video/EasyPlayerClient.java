@@ -304,6 +304,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     private int mPlaySuccessCount;
     private boolean mTimeout;
     private boolean mNotSupportedVideoCB, mNotSupportedAudioCB;
+    private boolean mSoftware = true;
 
     /**
      * 创建SDK对象
@@ -313,6 +314,11 @@ public class EasyPlayerClient implements Client.SourceCallBack {
      */
     public EasyPlayerClient(Context context, Surface surface, ResultReceiver receiver) {
         this(context, surface, receiver, null);
+    }
+
+    public EasyPlayerClient(Context context,TextureView view,Boolean software, ResultReceiver receiver) {
+        this(context, view, receiver, null,null);
+        this.mSoftware = software;
     }
 
     /**
@@ -973,9 +979,9 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                             initFrameInfo = frameInfo;
 
                             try {
+                                Log.d(TAG, String.format("解码方式：%s $b",mSoftware?"软解":"硬解",mSoftware));
                                 //软解 解码
-                                if (PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("use-sw-codec", true)) {
-                                    Log.d(TAG, "走软解");
+                                if (mSoftware) {
                                     handleDecodeType(0);
                                     //直接走软解
                                     throw new IllegalStateException("user set sw codec");
