@@ -71,30 +71,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     public static final int EASY_SDK_AUDIO_CODEC_G711A = 0x10007;   /* G711 alaw */
     public static final int EASY_SDK_AUDIO_CODEC_G726 = 0x1100B;    /* G726 */
 
-    /**
-     * @deprecated 请使用 {@link #RESULT_FIRST_FRAME_TTFF}
-     */
+
     public static final int RESULT_VIDEO_DISPLAYED = 01;
-
-    /**
-     * 视频解码失败，Bundle 携带 {@link #KEY_DECODE_ERROR_MSG}
-     */
-    public static final int RESULT_VIDEO_DECODE_FAILED = 98;
-
-    /**
-     * 首帧已显示，Bundle 携带 {@link #KEY_TTFF_MS} 与 {@link #KEY_VIDEO_DECODE_TYPE}
-     */
-    public static final int RESULT_FIRST_FRAME_TTFF = 99;
-
-    /**
-     * 首帧显示耗时（毫秒），自 {@link #start} / {@link #play} 调用起算
-     */
-    public static final String KEY_TTFF_MS = "ttff-ms";
-
-    /**
-     * 解码失败原因
-     */
-    public static final String KEY_DECODE_ERROR_MSG = "decode-error-msg";
 
     /**
      * 表示视频的解码方式：0 软解 / 1 硬解
@@ -118,10 +96,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     public static final int RESULT_RECORD_BEGIN = 7;
     public static final int RESULT_RECORD_END = 8;
 
-    /**
-     * 表示第一帧数据已经收到
-     */
-    public static final int RESULT_FRAME_RECVED = 9;
 
     private static final String TAG = EasyPlayerClient.class.getSimpleName();
     /**
@@ -163,8 +137,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     private int mRecordingStatus;
     private long muxerPausedMillis = 0L;
     private long mMuxerCuttingMillis = 0L;
-
-//    private RtmpClient mRTMPClient = new RtmpClient();
 
     public boolean isRecording() {
         return !TextUtils.isEmpty(mRecordingPath);
@@ -324,7 +296,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     private volatile long mNewestStample;
     private boolean mWaitingKeyFrame;
     private long mPlayStartElapsedMs;
-    private volatile boolean mFirstFrameTTFFSent;
     private volatile boolean mDecodeFailedSent;
     private volatile boolean mReconnecting;
     private long mReconnectStartMs;
@@ -466,7 +437,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         if (type == 0) type = TRANSTYPE_TCP;
         mNewestStample = 0;
         mPlayStartElapsedMs = SystemClock.elapsedRealtime();
-        mFirstFrameTTFFSent = false;
         mDecodeFailedSent = false;
         mReconnecting = false;
         mReconnectStartMs = 0;
@@ -490,9 +460,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         return mAudioEnable;
     }
 
-    private void sendFirstFrameTTFF(int decodeType) {
-        if (mFirstFrameTTFFSent) return;
-        mFirstFrameTTFFSent = true;
+    private void sendFirstFrameTTFF() {
         ResultReceiver rr = mRR;
         if (rr == null) return;
         long ttffMs = SystemClock.elapsedRealtime() - mPlayStartElapsedMs;
@@ -500,8 +468,9 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         data.putInt("code", 902);
         data.putLong("data", ttffMs);
         data.putString("msg", String.format("首帧时间: %d ms", ttffMs));
-        Log.i(TAG, String.format("first frame TTFF: %d ms, decodeType: %d", ttffMs, decodeType));
+        Log.i(TAG, String.format("first frame TTFF: %d ms", ttffMs));
         rr.send(0, data);
+        mPlayStartElapsedMs = 0;
     }
 
     private void sendPlaySuccessRate() {
@@ -1157,7 +1126,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 //                                        Log.i(TAG, "AAAA 1022 releaseBuffer ");
                                         softDecodeFailCount = 0;
                                         if (previousStampUs == 0l) {
-                                            sendFirstFrameTTFF(0);
                                         }
                                         previousStampUs = frameInfo.stamp;
                                     } else if (previousStampUs == 0l) {
@@ -1326,7 +1294,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                                 }
 
                                                 if (firstTime) {
-                                                    sendFirstFrameTTFF(1);
                                                 }
                                                 previousStampUs = info.presentationTimeUs;
                                         }
@@ -1554,7 +1521,10 @@ public class EasyPlayerClient implements Client.SourceCallBack {
             mReceivedDataLength += frameInfo.length;
         }
         if (_frameType == Client.EASY_SDK_VIDEO_FRAME_FLAG) {
-            //Log.d(TAG,String.format("receive video frame"));
+           if(frameInfo.sample_rate==1){
+               Log.d(TAG,String.format("receive video frame %d",frameInfo.sample_rate));
+               sendFirstFrameTTFF();
+           }
             //处理视频数据
             if (frameInfo.codec != EASY_SDK_VIDEO_CODEC_H264 && frameInfo.codec != EASY_SDK_VIDEO_CODEC_H265) {
                 ResultReceiver rr = mRR;
@@ -1762,6 +1732,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                         mReconnecting = true;
                         mReconnectStartMs = SystemClock.elapsedRealtime();
                     }
+                    if(mPlayStartElapsedMs==0) mPlayStartElapsedMs = SystemClock.elapsedRealtime();
                     mReconnectCount++;
                     mPlayAttemptCount++;
                     data.putString("msg", "重连中");
