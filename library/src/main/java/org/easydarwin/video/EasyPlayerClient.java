@@ -445,7 +445,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         mPlayStartElapsedMs = SystemClock.elapsedRealtime();
         mDecodeFailedSent = false;
         mReconnecting = false;
-        mReconnectStartMs = 0;
+        mReconnectStartMs =  SystemClock.elapsedRealtime();
         mReconnectCount = 0;
         mWaitingKeyFrame = PreferenceManager.getDefaultSharedPreferences(mContext).getBoolean("waiting_i_frame", true);
         mWidth = mHeight = 0;
@@ -528,7 +528,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         rr.send(0, data);
         mReconnecting = false;
         mReconnectCount = 0;
-
     }
 
     private VideoCodec.VideoDecoderLite tryCreateSoftDecoder(Object surface, boolean h264, String failReason) {
@@ -1125,20 +1124,24 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                         i420callback.onI420Data(buf);
                                     }
 
-                                    long decodeSpend = SystemClock.elapsedRealtime() - decodeBegin;
 
                                     if (buf != null) {
                                         mDecoder.releaseBuffer(buf);
 //                                        Log.i(TAG, "AAAA 1022 releaseBuffer ");
                                         softDecodeFailCount = 0;
-                                        if (previousStampUs == 0l) {
-                                        }
-                                        previousStampUs = frameInfo.stamp;
                                     } else if (previousStampUs == 0l) {
                                         softDecodeFailCount++;
                                         if (softDecodeFailCount >= SOFT_DECODE_FAIL_THRESHOLD) {
                                             sendVideoDecodeFailed("软解码失败");
                                         }
+                                    }
+
+                                    long decodeSpend = SystemClock.elapsedRealtime() - decodeBegin;
+
+                                    boolean firstFrame = previousStampUs == 0l;
+                                    if (firstFrame) {
+                                        if (mReconnecting) sendReconnectDuration();
+                                        sendPlaySuccessRate();
                                     }
 
                                     //Log.d(TAG, String.format("timestamp=%d diff=%d",current, current - previousStampUs ));
@@ -1159,6 +1162,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                             Log.d(TAG, "cache:" + cache);
                                         }
                                     }
+                                    previousStampUs = frameInfo.stamp;
                                 }
                             } else {
                                 // 走软硬解码
@@ -1300,6 +1304,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                                 }
 
                                                 if (firstTime) {
+                                                    if (mReconnecting) sendReconnectDuration();
+                                                    sendPlaySuccessRate();
                                                 }
                                                 previousStampUs = info.presentationTimeUs;
                                         }
@@ -1721,8 +1727,6 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                     break;
                 case 3:
                     data.putString("msg", "连接成功");
-                    if (mReconnecting) sendReconnectDuration();
-                    sendPlaySuccessRate();
                     break;
                 case 4:
                     data.putString("msg", "连接失败");

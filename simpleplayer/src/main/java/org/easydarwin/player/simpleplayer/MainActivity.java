@@ -21,7 +21,7 @@ import java.util.Locale;
 public class MainActivity extends AppCompatActivity {
 
     private static final String RTSP_URL =
-            "rtsp://admin:xf1234567@192.168.1.120:554/Streaming/Channels/101";
+            "rtsp://admin:admin123@192.168.1.190:554/cam/realmonitor?channel=0&subtype=0&unicast=true&proto=Onvif";
 
     private EasyPlayerClient rtspPlayer;
     private TextureView textureView;
@@ -76,7 +76,7 @@ public class MainActivity extends AppCompatActivity {
         if (rtspPlayer != null) {
             return;
         }
-        rtspPlayer = new EasyPlayerClient(this, textureView, true, resultReceiver);
+        rtspPlayer = new EasyPlayerClient(this, textureView, false, resultReceiver);
         rtspPlayer.play(RTSP_URL);
         updatePlayButton();
         appendEvent("开始播放...");
