@@ -4,4 +4,8 @@
     <color name="colorPrimaryDark">#1976D2</color>
     <color name="colorAccent">#2196F3</color>
     <color name="loading_blue">#2196F3</color>
+    <color name="switch_track_off">#E0E0E0</color>
+    <color name="text_decode_active">#2196F3</color>
+    <color name="text_decode_inactive">#9E9E9E</color>
+    <color name="decode_switch_bg">#EEEEEE</color>
 </resources>

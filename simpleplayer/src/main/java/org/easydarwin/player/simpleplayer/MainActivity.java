@@ -4,11 +4,15 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.ResultReceiver;
+import android.graphics.Typeface;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.SwitchCompat;
 import android.util.Log;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CompoundButton;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -27,6 +31,9 @@ public class MainActivity extends AppCompatActivity {
     private EasyPlayerClient rtspPlayer;
     private TextureView textureView;
     private Button btnPlayToggle;
+    private SwitchCompat mSoftwareSwitch;
+    private TextView tvDecodeHard;
+    private TextView tvDecodeSoft;
     private ProgressBar loadingBar;
     private ScrollView eventScroll;
     private TextView eventLog;
@@ -45,6 +52,9 @@ public class MainActivity extends AppCompatActivity {
         // TextureView 不支持 background，黑底由布局 video_container 提供；opaque 避免未出画面前透底
         textureView.setOpaque(true);
         btnPlayToggle = findViewById(R.id.btn_play_toggle);
+        mSoftwareSwitch = findViewById(R.id.switch_software_decode);
+        tvDecodeHard = findViewById(R.id.tv_decode_hard);
+        tvDecodeSoft = findViewById(R.id.tv_decode_soft);
         loadingBar = findViewById(R.id.loading);
         eventScroll = findViewById(R.id.event_scroll);
         eventLog = findViewById(R.id.event_log);
@@ -94,6 +104,19 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+        updateDecodeSwitchUi(mSoftwareSwitch.isChecked());
+        mSoftwareSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                updateDecodeSwitchUi(isChecked);
+                appendEvent(isChecked ? "解码方式: 软解" : "解码方式: 硬解");
+                if (rtspPlayer != null) {
+                    stopPlayer("切换解码方式，重新播放");
+                    startPlayer();
+                }
+            }
+        });
+
         startPlayer();
     }
 
@@ -107,11 +130,12 @@ public class MainActivity extends AppCompatActivity {
          * @param software       true=软解，false=硬解
          * @param ResultReceiver 消息回调
          */
-        rtspPlayer = new EasyPlayerClient(this, textureView, false, resultReceiver);
+        boolean software = mSoftwareSwitch.isChecked();
+        rtspPlayer = new EasyPlayerClient(this, textureView, software, resultReceiver);
         rtspPlayer.play(RTSP_URL);
         updatePlayButton();
         showLoading();
-        appendEvent("开始播放...");
+        appendEvent("开始播放(" + (software ? "软解" : "硬解") + ")...");
     }
 
     private void stopPlayer(String reason) {
@@ -129,6 +153,16 @@ public class MainActivity extends AppCompatActivity {
     /** 播放中显示「停止播放」，停止后显示「重新播放」 */
     private void updatePlayButton() {
         btnPlayToggle.setText(rtspPlayer != null ? "停止播放" : "重新播放");
+    }
+
+    /** 高亮当前选中的解码方式 */
+    private void updateDecodeSwitchUi(boolean isSoft) {
+        int active = ContextCompat.getColor(this, R.color.text_decode_active);
+        int inactive = ContextCompat.getColor(this, R.color.text_decode_inactive);
+        tvDecodeHard.setTextColor(isSoft ? inactive : active);
+        tvDecodeSoft.setTextColor(isSoft ? active : inactive);
+        tvDecodeHard.setTypeface(null, isSoft ? Typeface.NORMAL : Typeface.BOLD);
+        tvDecodeSoft.setTypeface(null, isSoft ? Typeface.BOLD : Typeface.NORMAL);
     }
 
     @Override

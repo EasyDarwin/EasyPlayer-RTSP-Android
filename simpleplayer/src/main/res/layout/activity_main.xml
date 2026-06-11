@@ -32,15 +32,66 @@
 
     </FrameLayout>
 
-    <Button
-        android:id="@+id/btn_play_toggle"
+    <LinearLayout
+        android:id="@+id/control_bar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_margin="8dp"
-        android:text="停止播放"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="8dp"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/video_container" />
+        app:layout_constraintTop_toBottomOf="@id/video_container">
+
+        <Button
+            android:id="@+id/btn_play_toggle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:text="停止播放" />
+
+        <LinearLayout
+            android:id="@+id/decode_switch_group"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_decode_switch"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="6dp">
+
+            <TextView
+                android:id="@+id/tv_decode_hard"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="硬解"
+                android:textSize="13sp" />
+
+            <android.support.v7.widget.SwitchCompat
+                android:id="@+id/switch_software_decode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:checked="true"
+                android:showText="false"
+                android:switchMinWidth="44dp"
+                android:thumb="@drawable/switch_thumb_selector"
+                android:track="@drawable/switch_track_selector" />
+
+            <TextView
+                android:id="@+id/tv_decode_soft"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="软解"
+                android:textSize="13sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
 
     <ScrollView
         android:id="@+id/event_scroll"
@@ -51,7 +102,7 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/btn_play_toggle">
+        app:layout_constraintTop_toBottomOf="@id/control_bar">
 
         <TextView
             android:id="@+id/event_log"
