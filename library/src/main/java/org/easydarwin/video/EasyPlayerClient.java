@@ -978,7 +978,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                             initFrameInfo = frameInfo;
 
                             try {
-                                Log.d(TAG, String.format("解码方式：%s $b",mSoftware?"软解":"硬解",mSoftware));
+                                Log.d(TAG, String.format("解码方式：%s ",mSoftware?"软解":"硬解"));
                                 //软解 解码
                                 if (mSoftware) {
                                     handleDecodeType(0);
@@ -1156,10 +1156,10 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                                             sleepTime %= 100000;
                                             long cache = mNewestStample - frameInfo.stamp;
 //                                            sleepTime = fixSleepTime(sleepTime, cache, 50000);
-////                                            if (sleepTime > 0) {
-////                                                Thread.sleep(sleepTime / 1000);
-////                                            }
-                                            Log.d(TAG, "cache:" + cache);
+//                                     if (sleepTime > 0) {
+//                                             Thread.sleep(sleepTime / 1000);
+//                                       }
+//                                            Log.d(TAG, "cache:" + cache);
                                         }
                                     }
                                     previousStampUs = frameInfo.stamp;
@@ -1673,7 +1673,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                 }
 
             }
-            Log.d(TAG, String.format("queue size :%d", mQueue.size()));
+//            Log.d(TAG, String.format("queue size :%d", mQueue.size()));
             try {
                 mQueue.put(frameInfo);
             } catch (InterruptedException e) {
