@@ -132,7 +132,7 @@ public class MainActivity extends AppCompatActivity {
         rtspPlayer.play(getString(R.string.rtsp_url));
         updatePlayButton();
         showLoading();
-        appendEvent("开始播放(" + (software ? "软解" : "硬解") + ")...");
+        appendEvent("开始播放");
     }
 
     private void stopPlayer(String reason) {
