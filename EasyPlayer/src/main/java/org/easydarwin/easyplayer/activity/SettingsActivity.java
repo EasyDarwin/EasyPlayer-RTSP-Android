@@ -43,6 +43,7 @@ public class SettingsActivity extends AppCompatActivity {
         mBinding.audioSwitch.setChecked(SPUtil.getAutoAudio(this));
         mBinding.recordSwitch.setChecked(SPUtil.getAutoRecord(this));
         mBinding.codecSwitch.setChecked(SPUtil.getswCodec(this));
+        mBinding.seiSwitch.setChecked(SPUtil.getSeiLog(this));
 
         mBinding.udpSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
             @Override
@@ -69,6 +70,13 @@ public class SettingsActivity extends AppCompatActivity {
             @Override
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
                 SPUtil.setswCodec(SettingsActivity.this, isChecked);
+            }
+        });
+
+        mBinding.seiSwitch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                SPUtil.setSeiLog(SettingsActivity.this, isChecked);
             }
         });
     }

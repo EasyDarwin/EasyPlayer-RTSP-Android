@@ -164,5 +164,35 @@
             android:layout_marginLeft="12dp"
             android:layout_marginRight="12dp" />
 
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:gravity="center_vertical"
+            android:padding="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="打印SEI数据"
+                android:textSize="15sp"
+                android:textColor="#4c4c4c"/>
+
+            <Switch
+                android:id="@+id/sei_switch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:thumb="@drawable/switch_custom_thumb_selector"
+                android:track="@drawable/switch_custom_track_selector"
+                android:layout_alignParentRight="true"/>
+
+        </RelativeLayout>
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#f0f0f0"
+            android:layout_marginLeft="12dp"
+            android:layout_marginRight="12dp" />
+
     </LinearLayout>
 </layout>

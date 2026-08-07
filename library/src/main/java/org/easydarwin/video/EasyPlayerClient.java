@@ -143,8 +143,11 @@ public class EasyPlayerClient implements Client.SourceCallBack {
     }
 
     private static class FrameInfoQueue extends PriorityQueue<Client.FrameInfo> {
-        public static final int CAPACITY = 500;
-        public static final int INITIAL_CAPACITY = 300;
+        /** 直播缓冲上限：过大易延迟，过小易卡顿 */
+        public static final int CAPACITY = 150;
+        public static final int INITIAL_CAPACITY = 60;
+        /** 超过该深度才触发一次「对齐到最新 I 帧」的追帧，避免频繁追帧卡顿 */
+        public static final int LOW_LATENCY_LIMIT = 80;
 
         public FrameInfoQueue() {
             super(INITIAL_CAPACITY, new Comparator<Client.FrameInfo>() {
@@ -159,6 +162,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         final Condition notFull = lock.newCondition();
         final Condition notVideo = lock.newCondition();
         final Condition notAudio = lock.newCondition();
+        /** 丢帧后必须等到下一个 I 帧再出视频，避免断 GOP 花屏 */
+        private boolean waitingKeyFrame = false;
 
         @Override
         public int size() {
@@ -176,6 +181,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
             try {
                 int size = super.size();
                 super.clear();
+                waitingKeyFrame = false;
                 int k = size;
 
                 for (; k > 0 && lock.hasWaiters(notFull); k--) {
@@ -190,22 +196,45 @@ public class EasyPlayerClient implements Client.SourceCallBack {
             lock.lockInterruptibly();
 
             try {
-                int size;
-                while ((size = super.size()) == CAPACITY) {
-                    Log.v(TAG, "queue full:" + CAPACITY);
-                    notFull.await();
+                // 追帧后尚未对齐到 I：丢弃随后的 P/B，只收 I（及音频）
+                if (!x.audio && waitingKeyFrame) {
+                    if (x.type != 1) {
+                        return;
+                    }
+                    waitingKeyFrame = false;
+                }
+
+                if (super.size() >= CAPACITY) {
+                    // 满了：对齐到最新 I 帧（整段 GOP 丢弃），禁止单独撕开参考链
+                    flushToLatestKeyFrame();
+                }
+
+                if (super.size() >= CAPACITY) {
+                    // 仍满：优先丢最旧音频腾地方；视频绝不半路丢 P
+                    if (x.audio) {
+                        Client.FrameInfo oldest = peek();
+                        if (oldest != null && oldest.audio) {
+                            remove();
+                            notVideo.signal();
+                        } else {
+                            return; // 保视频完整性，丢弃本帧音频
+                        }
+                    } else if (x.type == 1) {
+                        // 新来的是 I：丢掉队列里所有旧视频，从该 I 重新开始
+                        discardVideoBefore(Long.MAX_VALUE);
+                        waitingKeyFrame = false;
+                    } else {
+                        // 队列仍满且是 P：丢弃本帧并等待下一个 I，避免花屏
+                        waitingKeyFrame = true;
+                        return;
+                    }
                 }
 
                 offer(x);
-//                Log.d(TAG, String.format("queue size : " + size));
-                // 这里是乱序的。并非只有空的queue才丢到首位。因此不能做限制 if (size == 0)
-                {
-
-                    if (x.audio) {
-                        notAudio.signal();
-                    } else {
-                        notVideo.signal();
-                    }
+                if (x.audio) {
+                    notAudio.signal();
+                } else {
+                    notVideo.signal();
                 }
             } finally {
                 lock.unlock();
@@ -217,19 +246,26 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
             try {
                 while (true) {
+                    catchUpIfNeeded();
                     Client.FrameInfo x = peek();
 
                     if (x == null) {
                         notVideo.await();
+                    } else if (x.audio) {
+                        notVideo.await();
+                    } else if (waitingKeyFrame && x.type != 1) {
+                        // 等待 I：跳过已损坏参考链上的 P 帧
+                        remove();
+                        notFull.signal();
+                        notAudio.signal();
                     } else {
-                        if (!x.audio) {
-                            remove();
-                            notFull.signal();
-                            notAudio.signal();
-                            return x;
-                        } else {
-                            notVideo.await();
+                        if (x.type == 1) {
+                            waitingKeyFrame = false;
                         }
+                        remove();
+                        notFull.signal();
+                        notAudio.signal();
+                        return x;
                     }
                 }
             } finally {
@@ -242,22 +278,117 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
             try {
                 while (true) {
+                    catchUpIfNeeded();
                     Client.FrameInfo x = peek();
                     if (x == null) {
                         if (!notVideo.await(ms, TimeUnit.MILLISECONDS)) return null;
+                    } else if (x.audio) {
+                        if (!notVideo.await(ms, TimeUnit.MILLISECONDS)) return null;
+                    } else if (waitingKeyFrame && x.type != 1) {
+                        remove();
+                        notFull.signal();
+                        notAudio.signal();
                     } else {
-                        if (!x.audio) {
-                            remove();
-                            notFull.signal();
-                            notAudio.signal();
-                            return x;
-                        } else {
-                            notVideo.await();
+                        if (x.type == 1) {
+                            waitingKeyFrame = false;
                         }
+                        remove();
+                        notFull.signal();
+                        notAudio.signal();
+                        return x;
                     }
                 }
             } finally {
                 lock.unlock();
+            }
+        }
+
+        /** 积压时对齐到队列中最新 I 帧；必须已持有 lock */
+        private void catchUpIfNeeded() {
+            if (super.size() <= LOW_LATENCY_LIMIT) {
+                return;
+            }
+            flushToLatestKeyFrame();
+        }
+
+        /**
+         * 丢弃「最新 I 帧之前」的全部视频帧（整段旧 GOP），从最新 I 继续播。
+         * 不能只丢中间若干 P 帧，否则后续 P 缺参考会花屏。
+         */
+        private void flushToLatestKeyFrame() {
+            if (isEmpty()) {
+                return;
+            }
+
+            java.util.ArrayList<Client.FrameInfo> frames = new java.util.ArrayList<Client.FrameInfo>(this);
+            Client.FrameInfo latestI = null;
+            for (int i = 0; i < frames.size(); i++) {
+                Client.FrameInfo f = frames.get(i);
+                if (!f.audio && f.type == 1) {
+                    if (latestI == null || f.stamp >= latestI.stamp) {
+                        latestI = f;
+                    }
+                }
+            }
+
+            super.clear();
+
+            if (latestI == null) {
+                // 队列里没有 I：只保留音频，视频等下一个 I
+                waitingKeyFrame = true;
+                for (int i = 0; i < frames.size(); i++) {
+                    Client.FrameInfo f = frames.get(i);
+                    if (f.audio) {
+                        offer(f);
+                    }
+                }
+                Log.i(TAG, "catch-up: no keyframe in queue, wait next I");
+            } else {
+                waitingKeyFrame = false;
+                int keptVideo = 0;
+                int droppedVideo = 0;
+                for (int i = 0; i < frames.size(); i++) {
+                    Client.FrameInfo f = frames.get(i);
+                    if (f.audio) {
+                        // 音频跟最新 I 对齐，避免音画差过大
+                        if (f.stamp >= latestI.stamp) {
+                            offer(f);
+                        }
+                    } else if (f.stamp >= latestI.stamp) {
+                        offer(f);
+                        keptVideo++;
+                    } else {
+                        droppedVideo++;
+                    }
+                }
+                Log.i(TAG, "catch-up: flush to latest I, dropVideo=" + droppedVideo + " keepVideo=" + keptVideo);
+            }
+
+            // 唤醒可能在等 notFull 的生产者
+            while (lock.hasWaiters(notFull)) {
+                notFull.signal();
+            }
+            if (lock.hasWaiters(notVideo)) {
+                notVideo.signal();
+            }
+            if (lock.hasWaiters(notAudio)) {
+                notAudio.signal();
+            }
+        }
+
+        /** 丢弃 stamp 小于 threshold 的视频帧；threshold=MAX 表示丢全部视频 */
+        private void discardVideoBefore(long threshold) {
+            if (isEmpty()) return;
+            java.util.ArrayList<Client.FrameInfo> frames = new java.util.ArrayList<Client.FrameInfo>(this);
+            super.clear();
+            for (int i = 0; i < frames.size(); i++) {
+                Client.FrameInfo f = frames.get(i);
+                if (f.audio || f.stamp >= threshold) {
+                    offer(f);
+                }
+            }
+            while (lock.hasWaiters(notFull)) {
+                notFull.signal();
             }
         }
 
@@ -343,6 +474,15 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         i420callback = callback;
         lifecycler = null;
         mSEIDataCallback = seiDataCallback;
+    }
+
+    /** true=软解，false=硬解；需在 start/play 前设置 */
+    public void setSoftwareDecode(boolean software) {
+        mSoftware = software;
+    }
+
+    public boolean isSoftwareDecode() {
+        return mSoftware;
     }
 
 

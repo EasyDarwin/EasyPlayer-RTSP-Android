@@ -179,6 +179,31 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
 
                 if (activity == null) return;
 
+                // EasyPlayerClient 新回调统一走 resultCode=0，code/msg 在 Bundle 里
+                // code: 1连接中 3连接成功 4失败 5切分辨率 6流中断 7重连中 8无数据 9超时 10退出
+                //       900分辨率 901解码方式 902首帧时间 903解码失败 904不支持视频 905不支持音频
+                //       906重连耗时 907播放成功率 9003分辨率变化
+                if (resultData != null && resultData.containsKey("code")) {
+                    int mCode = resultData.getInt("code");
+                    String msg = resultData.getString("msg");
+                    Log.i(TAG, String.format("onReceiveResult: code:%d  msg: %s", mCode, msg));
+                    if (activity instanceof PlayActivity) {
+                        ((PlayActivity) activity).onPlayerCallback(PlayFragment.this, mCode, msg);
+                    }
+                    // loading：重连显示；出画/成功隐藏（RESULT_VIDEO_DISPLAYED 已不再回调）
+                    if (mCode == 7 || mCode == 1) {
+                        showLoading();
+                    } else if (mCode == 907 || mCode == 902) {
+                        if (mCode == 907) {
+                            onVideoDisplayed();
+                        } else {
+                            hideLoading();
+                        }
+                    } else if (mCode == 4 || mCode == 9 || mCode == 10 || mCode == 903) {
+                        hideLoading();
+                    }
+                }
+
                 if (resultCode == EasyPlayerClient.RESULT_VIDEO_DISPLAYED) {
                     if (resultData != null) {
                         int videoDecodeType = resultData.getInt(EasyPlayerClient.KEY_VIDEO_DECODE_TYPE, 0);
@@ -302,9 +327,9 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
 
     private void onVideoDisplayed() {
         View view = getView();
+        if (view == null) return;
         Log.i(TAG, String.format("VIDEO DISPLAYED!!!!%d*%d", mWidth, mHeight));
-//        Toast.makeText(PlayActivity.this, "视频正在播放了", Toast.LENGTH_SHORT).show();
-        view.findViewById(android.R.id.progress).setVisibility(View.GONE);
+        hideLoading();
 
         mSurfaceView.post(new Runnable() {
             @Override
@@ -321,6 +346,24 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
 
         cover.setVisibility(View.GONE);
         sendResult(RESULT_REND_VIDEO_DISPLAY, null);
+    }
+
+    private void showLoading() {
+        View view = getView();
+        if (view == null) return;
+        View progress = view.findViewById(android.R.id.progress);
+        if (progress != null) {
+            progress.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private void hideLoading() {
+        View view = getView();
+        if (view == null) return;
+        View progress = view.findViewById(android.R.id.progress);
+        if (progress != null) {
+            progress.setVisibility(View.GONE);
+        }
     }
 
     public boolean onRecordOrStop() {
@@ -345,6 +388,10 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
     // 开始渲染
     protected void startRending(SurfaceTexture surface) {
         mStreamRender = new EasyPlayerClient(getContext(), new Surface(surface), mResultReceiver, null, this);
+        // 读取设置页「使用FFmpeg进行视频软解码」开关
+        boolean software = SPUtil.getswCodec(getContext());
+        mStreamRender.setSoftwareDecode(software);
+        Log.i(TAG, "解码方式设置: " + (software ? "软解" : "硬解"));
 
         boolean autoRecord = SPUtil.getAutoRecord(getContext());
 
@@ -352,9 +399,11 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
         f.mkdirs();
 
         try {
+            showLoading();
             mStreamRender.start(mUrl, mType < 2 ? Client.TRANSTYPE_TCP : Client.TRANSTYPE_UDP, sendOption, Client.EASY_SDK_VIDEO_FRAME_FLAG | Client.EASY_SDK_AUDIO_FRAME_FLAG, "", "", autoRecord ? FileUtil.getMovieName(mUrl).getPath() : null);
         } catch (Exception e) {
             e.printStackTrace();
+            hideLoading();
             Toast.makeText(getContext(), e.getMessage(), Toast.LENGTH_LONG).show();
             return;
         }
@@ -659,9 +708,11 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
 
     @Override
     public void onSEIData(byte[] sei) {
-//        String seiStr = bytesToHex(sei);
-//        Log.d(TAG, "sei data = " + seiStr);
-        // 回调数据给监听器
+        // 设置页「打印SEI数据」开关关闭时不打印、不回调
+        if (getContext() == null || !SPUtil.getSeiLog(getContext())) {
+            return;
+        }
+        Log.d(TAG, "sei data length = " + (sei == null ? 0 : sei.length));
         if (seiDataListener != null) {
             seiDataListener.onSEIDataReceived(sei);
         }

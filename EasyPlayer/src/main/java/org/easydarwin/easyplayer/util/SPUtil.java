@@ -65,4 +65,19 @@ public class SPUtil {
                 .apply();
     }
 
+    /* ============================ 打印 SEI 数据（默认关闭） ============================ */
+    private static final String KEY_SEI_LOG = "sei_log";
+
+    public static boolean getSeiLog(Context context) {
+        return PreferenceManager.getDefaultSharedPreferences(context)
+                .getBoolean(KEY_SEI_LOG, false);
+    }
+
+    public static void setSeiLog(Context context, boolean isChecked) {
+        PreferenceManager.getDefaultSharedPreferences(context)
+                .edit()
+                .putBoolean(KEY_SEI_LOG, isChecked)
+                .apply();
+    }
+
 }

@@ -37,6 +37,7 @@ import org.easydarwin.easyplayer.databinding.ActivityMainBinding;
 import org.easydarwin.easyplayer.fragments.ImageFragment;
 import org.easydarwin.easyplayer.fragments.PlayFragment;
 import org.easydarwin.easyplayer.util.FileUtil;
+import org.easydarwin.easyplayer.util.SPUtil;
 
 import java.io.File;
 import java.text.SimpleDateFormat;
@@ -486,6 +487,18 @@ public class PlayActivity extends AppCompatActivity implements PlayFragment.OnDo
      * state：1、连接中，2、连接错误，3、连接线程退出
      * */
     public void onEvent(PlayFragment playFragment, int state, int err, String msg) {
+        appendMsg(msg);
+    }
+
+    /**
+     * EasyPlayerClient ResultReceiver 回调（与 simpleplayer MainActivity 一致）
+     */
+    public void onPlayerCallback(PlayFragment playFragment, int code, String msg) {
+        appendMsg(String.format("code:%d  msg: %s", code, msg == null ? "" : msg));
+    }
+
+    private void appendMsg(String msg) {
+        if (mBinding == null || mBinding.msgTxt == null) return;
         mBinding.msgTxt.append(String.format("[%s]\t%s\t\n", new SimpleDateFormat("HH:mm:ss").format(new Date()), msg));
     }
 
@@ -506,6 +519,9 @@ public class PlayActivity extends AppCompatActivity implements PlayFragment.OnDo
 
     @Override
     public void onSEIDataReceived(final byte[] sei) {
+        if (!SPUtil.getSeiLog(this)) {
+            return;
+        }
         runOnUiThread(new Runnable() {
             @Override
             public void run() {
@@ -513,6 +529,7 @@ public class PlayActivity extends AppCompatActivity implements PlayFragment.OnDo
                 String seiData = bytesToHex(sei);
                 mBinding.msgTxt.append(String.format("[%s] 收到SEI[%d]: %s \n", new SimpleDateFormat("HH:mm:ss").format(new Date()), sei.length, seiData));
                 // 自动滚动到底部
+                if (mBinding.msgTxt.getLayout() == null) return;
                 final int scrollAmount = mBinding.msgTxt.getLayout().getLineTop(mBinding.msgTxt.getLineCount()) - mBinding.msgTxt.getHeight();
                 if (scrollAmount > 0) {
                     mBinding.msgTxt.scrollTo(0, scrollAmount);

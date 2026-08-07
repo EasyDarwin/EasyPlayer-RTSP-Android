@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">SimplePlayer</string>
-    <string name="rtsp_url">rtsp://192.168.169.1/H264</string>
+    <string name="rtsp_url">rtsp://admin:a1234567@192.168.2.120:554/Streaming/Channels/101</string>
 </resources>
