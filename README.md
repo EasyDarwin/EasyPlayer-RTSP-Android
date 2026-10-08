@@ -23,7 +23,15 @@ EasyPlayer-**RTSP Android** 播放器是由[EasyDarwin团队](https://www.easyda
 - [x] [录像]支持播放过程中，**随时录像**；
 
 ## 编译方法 ##
-Android：Android Studio编译；
+
+直接用 Android Studio 打开本仓库根目录（`settings.gradle` 所在目录），完成首次
+Gradle 同步后，点击工具栏的锤子图标（Build > Make Project）即可编译工程。
+工程自带 Gradle Wrapper 和三个 ABI 的原生库；日常编译不需要单独安装 NDK/CMake，
+也不需要下载、解压或编译 FFmpeg。只在需要重建原生库时，才按下方文档安装 NDK r28+。
+如果 Android Studio 提示缺少 Android SDK Platform 35，按提示通过 SDK Manager 安装即可。
+
+原生库已改为 FFmpeg 源码构建并支持 Android 16 KB 页大小。重建方法与模拟器测试见
+[原生库与 16 KB 适配](docs/NATIVE_16KB.md)。
 
 
 ## 最新版本下载 ##

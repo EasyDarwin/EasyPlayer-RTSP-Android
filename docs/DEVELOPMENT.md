@@ -14,7 +14,7 @@ EasyPlayer-RTSP Android 是由 [EasyDarwin](https://www.easydarwin.org) 团队�
 | 音频编码 | G711A、G711U、G726、AAC |
 | 传输协议 | RTSP over TCP / UDP |
 | 解码方式 | MediaCodec 硬解为主，部分场景软解 |
-| CPU 架构 | armeabi-v7a、arm64-v8a、x86、x86_64 |
+| CPU 架构 | armeabi-v7a、arm64-v8a、x86 |
 
 主要能力：超低延迟播放、多窗口多实例、TCP/UDP 切换、Buffer 配置、静音、延时追帧、快照、录像、自定义显示布局。
 
@@ -72,13 +72,10 @@ org.easydarwin
 | 库名 | 作用 |
 |------|------|
 | `libEasyRTSPClient.so` | RTSP 拉流、解复用 |
-| `libVideoCodecer.so` | 视频软解、录像编码 |
-| `libAudioCodecer.so` | 音频解码 |
-| `libproffmpeg.so` | FFmpeg 依赖 |
-| `libyuv_android.so` | YUV 处理 |
-| `libTxtOverlay.so` | 文字叠加（可选） |
+| `libEasyPlayerFFmpeg.so` | 音视频解码、MP4 录像、YUV 转换（FFmpeg 7.1.5 + JNI） |
 
-支持 ABI：`armeabi-v7a`、`arm64-v8a`、`x86`（EasyPlayer 模块还声明了 `armeabi`、`x86_64`）。
+支持 ABI：`armeabi-v7a`、`arm64-v8a`、`x86`。原生库重建与 16 KB 验证见
+[NATIVE_16KB.md](NATIVE_16KB.md)。
 
 ---
 
@@ -88,10 +85,11 @@ org.easydarwin
 
 | 工具 | 版本（工程当前） |
 |------|------------------|
-| Android Studio | Arctic Fox 及以上 |
-| Gradle | 7.0.2（wrapper） |
-| Android Gradle Plugin | 7.0.4 |
-| compileSdkVersion | 31（EasyPlayer / library） |
+| Android Studio | 支持 AGP 8.7 的版本 |
+| JDK | 17 或 21 |
+| Gradle | 8.9（wrapper） |
+| Android Gradle Plugin | 8.7.3 |
+| compileSdkVersion | 35（所有模块） |
 | minSdkVersion | 21（EasyPlayer / library） |
 | Support Library | 26.1.0 |
 

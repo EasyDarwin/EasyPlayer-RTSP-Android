@@ -4,16 +4,18 @@ buildscript {
     ext.support_version = "26.1.0"
     repositories {
         google()
+        mavenCentral()
         maven { url 'https://maven.aliyun.com/repository/jcenter' }
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:7.0.4'
+        classpath 'com.android.tools.build:gradle:8.7.3'
     }
 }
 
 allprojects {
     repositories {
         google()
+        mavenCentral()
         maven { url "https://jitpack.io" }
         maven { url 'https://maven.aliyun.com/repository/jcenter' }
     }

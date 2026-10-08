@@ -24,3 +24,8 @@
 -keepclassmembers class org.easydarwin.video.Client$FrameInfo{
     *;
 }
+
+# The JNI muxer looks up this field by name.
+-keepclassmembers class org.easydarwin.video.EasyMuxer2 {
+    long ctx;
+}

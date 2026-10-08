@@ -50,6 +50,7 @@ public class MainActivity extends AppCompatActivity {
         textureView.setOpaque(true);
         btnPlayToggle = findViewById(R.id.btn_play_toggle);
         mSoftwareSwitch = findViewById(R.id.switch_software_decode);
+        mSoftwareSwitch.setChecked(getIntent().getBooleanExtra("software", false));
         tvDecodeHard = findViewById(R.id.tv_decode_hard);
         tvDecodeSoft = findViewById(R.id.tv_decode_soft);
         loadingBar = findViewById(R.id.loading);
@@ -129,7 +130,8 @@ public class MainActivity extends AppCompatActivity {
          */
         boolean software = mSoftwareSwitch.isChecked();
         rtspPlayer = new EasyPlayerClient(this, textureView, software, resultReceiver);
-        rtspPlayer.play(getString(R.string.rtsp_url));
+        String url = getIntent().getStringExtra("rtsp_url");
+        rtspPlayer.play(url != null ? url : getString(R.string.rtsp_url));
         updatePlayButton();
         showLoading();
         appendEvent("开始播放");

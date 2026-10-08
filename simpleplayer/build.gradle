@@ -1,7 +1,9 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 31
+    namespace 'org.easydarwin.player.simpleplayer'
+    compileSdkVersion 35
+    buildFeatures { buildConfig true }
 
     defaultConfig {
         applicationId "org.easydarwin.easyplayer"
@@ -10,7 +12,7 @@ android {
         versionCode 1
         versionName "1.0"
 
-        testInstrumentationRunner "android.support.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner "org.easydarwin.player.simpleplayer.test.NativeSmokeInstrumentation"
 
         buildConfigField 'String', 'KEY', '"EasyPlayer is free!"'
         buildConfigField 'String', 'RTSP_URL', '"rtsp://184.72.239.149/vod/mp4://BigBuckBunny_175k.mov"'

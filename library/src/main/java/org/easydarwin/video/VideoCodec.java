@@ -8,8 +8,7 @@ import java.nio.ByteBuffer;
 public class VideoCodec {
 
     static {
-        System.loadLibrary("proffmpeg");
-        System.loadLibrary("VideoCodecer");
+        System.loadLibrary("EasyPlayerFFmpeg");
     }
 
     public static final int DECODER_H264 = 0;

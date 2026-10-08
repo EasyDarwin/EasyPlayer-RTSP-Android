@@ -1,8 +1,9 @@
 apply plugin: 'com.android.library'
 
 android {
-    compileSdkVersion 31
-    buildToolsVersion '28.0.3'
+    namespace 'org.easydarwin.video'
+    compileSdkVersion 35
+    buildFeatures { buildConfig true }
 
     defaultConfig {
         minSdkVersion 21

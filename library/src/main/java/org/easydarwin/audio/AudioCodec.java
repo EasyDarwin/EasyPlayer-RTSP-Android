@@ -5,8 +5,7 @@ package org.easydarwin.audio;
  */
 public class AudioCodec {
     static {
-        System.loadLibrary("proffmpeg");
-        System.loadLibrary("AudioCodecer");
+        System.loadLibrary("EasyPlayerFFmpeg");
     }
 
     public static native long create(int codec, int sample_rate, int channels, int sample_bit);

@@ -1,9 +1,10 @@
 .gradle
+.native/
+__pycache__/
 .idea
 build
 *.iml
 local.properties
-gradle.properties
 EasyPlayer/basic/
 EasyPlayer/release
 simpleplayer/release
