@@ -67,6 +67,8 @@
             android:name=".activity.MediaFilesActivity"
             android:label="文件夹" />
 
+        <activity android:name=".activity.LocalPlaybackActivity" android:exported="false" />
+
         <activity android:name=".activity.AboutActivity"></activity>
 
         <activity

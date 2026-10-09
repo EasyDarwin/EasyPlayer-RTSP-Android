@@ -5,116 +5,168 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
+import android.support.v4.view.PagerAdapter;
+import android.support.v4.view.ViewPager;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 
 import com.bumptech.glide.Glide;
-import com.bumptech.glide.load.resource.drawable.GlideDrawable;
-import com.bumptech.glide.request.target.ImageViewTarget;
 
 import org.easydarwin.easyplayer.R;
 import org.easydarwin.easyplayer.databinding.FragmentImageBinding;
 
-import uk.co.senab.photoview.PhotoViewAttacher;
+import java.io.File;
+import java.io.FilenameFilter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 
-/**
- * A simple {@link Fragment} subclass.
- * Use the {@link ImageFragment#newInstance} factory method to
- * create an instance of this fragment.
- */
+import uk.co.senab.photoview.PhotoView;
+
+/** Full-screen image viewer with PhotoView zooming and ViewPager navigation. */
 public class ImageFragment extends Fragment {
 
-    private static final String ARG_PARAM1 = "param1";
-    private static final String ARG_PARAM2 = "param2";
+    private static final String ARG_URI = "image_uri";
+    private static final String ARG_DIRECTORY = "image_directory";
+    private static final String ARG_SELECTED_PATH = "selected_image_path";
 
-    private Uri mUri;
-    private FragmentImageBinding mBinding;
-    private PhotoViewAttacher mAttacher;
+    private FragmentImageBinding binding;
+    private ArrayList<Uri> images = new ArrayList<>();
+    private int initialPosition;
 
     public ImageFragment() {
-        // Required empty public constructor
     }
 
-    /**
-     * Use this factory method to create a new instance of
-     * this fragment using the provided parameters.
-     *
-     * @param uri Parameter 1.
-     * @return A new instance of fragment ImageFragment.
-     */
+    /** Keeps the existing single-image entry point for the playback overlay. */
     public static ImageFragment newInstance(Uri uri) {
         Bundle args = new Bundle();
-        args.putParcelable(ARG_PARAM1, uri);
-
+        args.putParcelable(ARG_URI, uri);
         ImageFragment fragment = new ImageFragment();
         fragment.setArguments(args);
+        return fragment;
+    }
 
+    /** Opens all JPEG snapshots in a folder, starting at the selected image. */
+    public static ImageFragment newGalleryInstance(File directory, File selected) {
+        Bundle args = new Bundle();
+        args.putString(ARG_DIRECTORY, directory.getAbsolutePath());
+        args.putString(ARG_SELECTED_PATH, selected.getAbsolutePath());
+        ImageFragment fragment = new ImageFragment();
+        fragment.setArguments(args);
         return fragment;
     }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Bundle args = getArguments();
+        if (args == null) return;
 
-        if (getArguments() != null) {
-            mUri = getArguments().getParcelable(ARG_PARAM1);
+        String directoryPath = args.getString(ARG_DIRECTORY);
+        if (directoryPath != null) {
+            File directory = new File(directoryPath);
+            File[] files = directory.listFiles(new FilenameFilter() {
+                @Override
+                public boolean accept(File dir, String name) {
+                    return name.toLowerCase(java.util.Locale.ROOT).endsWith(".jpg");
+                }
+            });
+            if (files != null) {
+                Arrays.sort(files, new Comparator<File>() {
+                    @Override
+                    public int compare(File left, File right) {
+                        int byTime = Long.compare(right.lastModified(), left.lastModified());
+                        return byTime != 0 ? byTime : right.getName().compareTo(left.getName());
+                    }
+                });
+                String selectedPath = args.getString(ARG_SELECTED_PATH);
+                for (int i = 0; i < files.length; i++) {
+                    images.add(Uri.fromFile(files[i]));
+                    if (files[i].getAbsolutePath().equals(selectedPath)) initialPosition = i;
+                }
+            }
+        } else {
+            Uri uri = args.getParcelable(ARG_URI);
+            if (uri != null) images.add(uri);
         }
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container, Bundle savedInstanceState) {
-        mBinding = DataBindingUtil.inflate(inflater, R.layout.fragment_image, container, false);
-        mBinding.getRoot().setOnClickListener(new View.OnClickListener() {
+        binding = DataBindingUtil.inflate(inflater, R.layout.fragment_image, container, false);
+        binding.imageClose.setOnClickListener(v -> closeViewer());
+        binding.imagePager.setAdapter(new ImagePagerAdapter());
+        binding.imagePager.addOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
             @Override
-            public void onClick(View v) {
-                getFragmentManager().popBackStack();
+            public void onPageSelected(int position) {
+                updateCounter(position);
             }
         });
-
-        return mBinding.getRoot();
+        binding.imagePager.setCurrentItem(initialPosition, false);
+        updateCounter(initialPosition);
+        return binding.getRoot();
     }
 
-    @Override
-    public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
-        super.onViewCreated(view, savedInstanceState);
+    private void updateCounter(int position) {
+        if (binding == null) return;
+        int count = images.size();
+        binding.imageCounter.setText(count == 0 ? "0 / 0" : (position + 1) + " / " + count);
+        binding.imageCounter.setVisibility(count > 1 ? View.VISIBLE : View.GONE);
+    }
 
-        Glide.with(this).load(mUri).into(new ImageViewTarget<GlideDrawable>(mBinding.galleryImageView) {
-            @Override
-            protected void setResource(GlideDrawable resource) {
-                mBinding.galleryImageView.setImageDrawable(resource);
+    private void closeViewer() {
+        if (getFragmentManager() != null) getFragmentManager().popBackStack();
+    }
 
-                mAttacher = new PhotoViewAttacher(mBinding.galleryImageView);
-//                mAttacher.setZoomable(false);
-                mAttacher.setOnPhotoTapListener(new PhotoViewAttacher.OnPhotoTapListener() {
-                    @Override
-                    public void onPhotoTap(View view, float v, float v1) {
-                        getFragmentManager().popBackStack();
-                    }
+    private class ImagePagerAdapter extends PagerAdapter {
+        @Override
+        public int getCount() {
+            return images.size();
+        }
 
-                    @Override
-                    public void onOutsidePhotoTap() {
-                        getFragmentManager().popBackStack();
-                    }
-                });
+        @Override
+        public Object instantiateItem(ViewGroup container, int position) {
+            PhotoView photoView = new PhotoView(container.getContext());
+            photoView.setBackgroundColor(0xff000000);
+            photoView.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+            // At the image edge, let horizontal gestures page to the previous/next photo.
+            photoView.setAllowParentInterceptOnEdge(true);
+            photoView.setOnViewTapListener((view, x, y) -> {
+                if (binding != null) {
+                    int visibility = binding.imageToolbar.getVisibility() == View.VISIBLE
+                            ? View.GONE : View.VISIBLE;
+                    binding.imageToolbar.setVisibility(visibility);
+                }
+            });
+            Glide.with(ImageFragment.this).load(images.get(position)).into(photoView);
+            container.addView(photoView, new ViewPager.LayoutParams());
+            return photoView;
+        }
 
-                mAttacher.setOnViewTapListener(new PhotoViewAttacher.OnViewTapListener() {
-                    @Override
-                    public void onViewTap(View view, float v, float v1) {
-                        getFragmentManager().popBackStack();
-                    }
-                });
-            }
-        });
+        @Override
+        public void destroyItem(ViewGroup container, int position, Object object) {
+            container.removeView((View) object);
+            Glide.clear((View) object);
+        }
+
+        @Override
+        public boolean isViewFromObject(View view, Object object) {
+            return view == object;
+        }
+
+        @Override
+        public int getItemPosition(Object object) {
+            return POSITION_NONE;
+        }
     }
 
     @Override
     public void onDestroyView() {
-        if (mAttacher != null) {
-            mAttacher.cleanup();
-            mAttacher = null;
+        if (binding != null) {
+            binding.imagePager.setAdapter(null);
+            binding = null;
         }
-
         super.onDestroyView();
     }
 }

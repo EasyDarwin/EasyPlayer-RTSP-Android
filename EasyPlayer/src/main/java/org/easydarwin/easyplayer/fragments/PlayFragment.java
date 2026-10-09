@@ -8,7 +8,6 @@ import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.graphics.drawable.ColorDrawable;
-import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -40,13 +39,13 @@ import org.easydarwin.easyplayer.BuildConfig;
 import org.easydarwin.easyplayer.R;
 import org.easydarwin.easyplayer.activity.PlayActivity;
 import org.easydarwin.easyplayer.util.FileUtil;
+import org.easydarwin.easyplayer.util.SnapshotFileWriter;
 import org.easydarwin.easyplayer.util.SPUtil;
 import org.easydarwin.easyplayer.views.AngleView;
 import org.easydarwin.video.Client;
 import org.easydarwin.video.EasyPlayerClient;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.util.UUID;
@@ -101,7 +100,6 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
     private SurfaceTexture mSurfaceTexture;
     protected ImageView cover;
 
-    private MediaScannerConnection mScanner;
 
     private AsyncTask<Void, Void, Bitmap> mLoadingPictureThumbTask;
 
@@ -152,7 +150,7 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
         cover = (ImageView) view.findViewById(R.id.surface_cover);
 
         if (!TextUtils.isEmpty(mUrl)) {
-            Glide.with(this).load(FileUtil.getSnapFile(mUrl)).signature(new StringSignature(UUID.randomUUID().toString())).fitCenter().into(cover);
+            Glide.with(this).load(FileUtil.getSnapFile(getContext(), mUrl)).signature(new StringSignature(UUID.randomUUID().toString())).fitCenter().into(cover);
         }
 
         return view;
@@ -187,6 +185,9 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
                     int mCode = resultData.getInt("code");
                     String msg = resultData.getString("msg");
                     Log.i(TAG, String.format("onReceiveResult: code:%d  msg: %s", mCode, msg));
+                    if (mCode == 900 || mCode == 9003) {
+                        updateVideoSize(resultData);
+                    }
                     if (activity instanceof PlayActivity) {
                         ((PlayActivity) activity).onPlayerCallback(PlayFragment.this, mCode, msg);
                     }
@@ -212,10 +213,7 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
 
                     onVideoDisplayed();
                 } else if (resultCode == EasyPlayerClient.RESULT_VIDEO_SIZE) {
-                    mWidth = resultData.getInt(EasyPlayerClient.EXTRA_VIDEO_WIDTH);
-                    mHeight = resultData.getInt(EasyPlayerClient.EXTRA_VIDEO_HEIGHT);
-
-                    onVideoSizeChange();
+                    updateVideoSize(resultData);
                 } else if (resultCode == EasyPlayerClient.RESULT_TIMEOUT) {
                     new AlertDialog.Builder(getActivity()).setMessage("试播时间到").setTitle("SORRY").setPositiveButton(android.R.string.ok, null).show();
                 } else if (resultCode == EasyPlayerClient.RESULT_UNSUPPORTED_AUDIO) {
@@ -334,11 +332,18 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
         mSurfaceView.post(new Runnable() {
             @Override
             public void run() {
-                if (mWidth != 0 && mHeight != 0) {
+                if (isAdded() && mSurfaceView.isAvailable() && mWidth > 0 && mHeight > 0) {
                     Bitmap e = Bitmap.createBitmap(mWidth, mHeight, Bitmap.Config.ARGB_8888);
-                    mSurfaceView.getBitmap(e);
-                    File f = FileUtil.getSnapFile(mUrl);
-                    saveBitmapInFile(f.getPath(), e);
+                    File f = FileUtil.getSnapFile(getContext(), mUrl);
+                    Bitmap captured = mSurfaceView.getBitmap(e);
+                    if (captured == null) {
+                        Log.w(TAG, "initial snapshot skipped: TextureView has no frame");
+                    } else if (!saveBitmapInFile(f.getPath(), captured)) {
+                        Log.e(TAG, "initial snapshot save failed: " + f.getPath());
+                    } else {
+                        Log.i(TAG, "initial snapshot saved: " + f.getPath());
+                    }
+                    if (captured != null && captured != e) captured.recycle();
                     e.recycle();
                 }
             }
@@ -367,11 +372,21 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
     }
 
     public boolean onRecordOrStop() {
+        if (mStreamRender == null) {
+            Log.w(TAG, "record click ignored: player is not initialized");
+            return false;
+        }
+
         if (!mStreamRender.isRecording()) {
-            mStreamRender.startRecord(FileUtil.getMovieName(mUrl).getPath());
-            return true;
+            String path = FileUtil.getMovieName(getContext(), mUrl).getPath();
+            Log.i(TAG, "record start requested: size=" + mWidth + "x" + mHeight);
+            mStreamRender.startRecord(path);
+            boolean recording = mStreamRender.isRecording();
+            Log.i(TAG, "record start result: recording=" + recording);
+            return recording;
         } else {
             mStreamRender.stopRecord();
+            Log.i(TAG, "record stop requested");
             return false;
         }
     }
@@ -395,12 +410,12 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
 
         boolean autoRecord = SPUtil.getAutoRecord(getContext());
 
-        File f = new File(FileUtil.getMoviePath(mUrl));
+        File f = new File(FileUtil.getMoviePath(getContext(), mUrl));
         f.mkdirs();
 
         try {
             showLoading();
-            mStreamRender.start(mUrl, mType < 2 ? Client.TRANSTYPE_TCP : Client.TRANSTYPE_UDP, sendOption, Client.EASY_SDK_VIDEO_FRAME_FLAG | Client.EASY_SDK_AUDIO_FRAME_FLAG, "", "", autoRecord ? FileUtil.getMovieName(mUrl).getPath() : null);
+            mStreamRender.start(mUrl, mType < 2 ? Client.TRANSTYPE_TCP : Client.TRANSTYPE_UDP, sendOption, Client.EASY_SDK_VIDEO_FRAME_FLAG | Client.EASY_SDK_AUDIO_FRAME_FLAG, "", "", autoRecord ? FileUtil.getMovieName(getContext(), mUrl).getPath() : null);
         } catch (Exception e) {
             e.printStackTrace();
             hideLoading();
@@ -421,16 +436,30 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
     }
 
     // 抓拍
-    public void takePicture(final String path) {
+    public boolean takePicture(final String path) {
         try {
-            if (mWidth <= 0 || mHeight <= 0) {
-                return;
+            if (mSurfaceView == null || mWidth <= 0 || mHeight <= 0) {
+                Log.w(TAG, "snapshot skipped: surface=" + (mSurfaceView != null)
+                        + ", videoSize=" + mWidth + "x" + mHeight + ", path=" + path);
+                return false;
             }
 
             Bitmap bitmap = Bitmap.createBitmap(mWidth, mHeight, Bitmap.Config.ARGB_8888);
-            mSurfaceView.getBitmap(bitmap);
-            saveBitmapInFile(path, bitmap);
-            bitmap.recycle();
+            Bitmap capturedBitmap = mSurfaceView.getBitmap(bitmap);
+            if (capturedBitmap == null) {
+                Log.w(TAG, "snapshot skipped: TextureView has no frame, path=" + path);
+                bitmap.recycle();
+                return false;
+            }
+            if (!saveBitmapInFile(path, capturedBitmap)) {
+                Log.e(TAG, "snapshot save failed: " + path);
+                if (capturedBitmap != bitmap) bitmap.recycle();
+                capturedBitmap.recycle();
+                return false;
+            }
+            Log.i(TAG, "snapshot saved: " + path + ", bytes=" + new File(path).length());
+            if (capturedBitmap != bitmap) bitmap.recycle();
+            capturedBitmap.recycle();
 
             mRenderCover.setImageDrawable(new ColorDrawable(getResources().getColor(android.R.color.white)));
             mRenderCover.setVisibility(View.VISIBLE);
@@ -463,6 +492,10 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
                 protected void onPostExecute(Bitmap bitmap) {
                     super.onPostExecute(bitmap);
 
+                    if (bitmap == null) {
+                        Log.w(TAG, "snapshot thumbnail decode failed: " + mPath);
+                        return;
+                    }
                     if (isCancelled()) {
                         bitmap.recycle();
                         return;
@@ -488,11 +521,13 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
                     iv.setTag(mPath);
                 }
             }.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+            return true;
         } catch (OutOfMemoryError error) {
-            error.printStackTrace();
+            Log.e(TAG, "snapshot failed: out of memory, videoSize=" + mWidth + "x" + mHeight, error);
         } catch (IllegalStateException e) {
-            e.printStackTrace();
+            Log.e(TAG, "snapshot failed: TextureView is not ready", e);
         }
+        return false;
     }
 
     public static Bitmap decodeSampledBitmapFromResource(String path, int reqWidth, int reqHeight) {
@@ -529,47 +564,22 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
         return inSampleSize;
     }
 
-    private void saveBitmapInFile(final String path, Bitmap bitmap) {
-        FileOutputStream fos = null;
-
+    private boolean saveBitmapInFile(final String path, Bitmap bitmap) {
         try {
-            fos = new FileOutputStream(path);
-            bitmap.compress(Bitmap.CompressFormat.JPEG, 90, fos);
-
-            if (mScanner == null) {
-                MediaScannerConnection connection = new MediaScannerConnection(getContext(), new MediaScannerConnection.MediaScannerConnectionClient() {
-                    public void onMediaScannerConnected() {
-                        mScanner.scanFile(path, null /* mimeType */);
-                    }
-
-                    public void onScanCompleted(String path1, Uri uri) {
-                        if (path1.equals(path)) {
-                            mScanner.disconnect();
-                            mScanner = null;
-                        }
-                    }
-                });
-
-                try {
-                    connection.connect();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-
-                mScanner = connection;
+            boolean saved = SnapshotFileWriter.write(new File(path), output ->
+                    bitmap.compress(Bitmap.CompressFormat.JPEG, 90, output));
+            if (!saved) {
+                Log.e(TAG, "JPEG compression returned false: " + path);
+                return false;
             }
+
+            return new File(path).isFile() && new File(path).length() > 0;
         } catch (IOException e) {
-            e.printStackTrace();
+            Log.e(TAG, "cannot write snapshot file: " + path, e);
+            return false;
         } catch (OutOfMemoryError error) {
-            error.printStackTrace();
-        } finally {
-            if (fos != null) {
-                try {
-                    fos.close();
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
+            Log.e(TAG, "cannot save snapshot: out of memory, path=" + path, error);
+            return false;
         }
     }
 
@@ -581,6 +591,19 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
     // 退出全屏模式
     public void quiteFullscreen() {
         setScaleType(ASPECT_RATIO_CROPS_MATRIX);
+    }
+
+    private void updateVideoSize(Bundle data) {
+        if (data == null) return;
+        int width = data.getInt(EasyPlayerClient.EXTRA_VIDEO_WIDTH);
+        int height = data.getInt(EasyPlayerClient.EXTRA_VIDEO_HEIGHT);
+        if (width <= 0 || height <= 0) {
+            Log.w(TAG, "ignored invalid video dimensions: " + width + "x" + height);
+            return;
+        }
+        mWidth = width;
+        mHeight = height;
+        onVideoSizeChange();
     }
 
     private void onVideoSizeChange() {
@@ -753,7 +776,7 @@ public class PlayFragment extends Fragment implements TextureView.SurfaceTexture
         this.mUrl = url;
 
         if (!TextUtils.isEmpty(mUrl)) {
-            Glide.with(this).load(FileUtil.getSnapFile(mUrl)).signature(new StringSignature(UUID.randomUUID().toString())).fitCenter().into(cover);
+            Glide.with(this).load(FileUtil.getSnapFile(getContext(), mUrl)).signature(new StringSignature(UUID.randomUUID().toString())).fitCenter().into(cover);
         }
     }
 

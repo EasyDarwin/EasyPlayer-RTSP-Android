@@ -1514,9 +1514,17 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
     @TargetApi(Build.VERSION_CODES.JELLY_BEAN_MR2)
     public synchronized void startRecord(String path) {
-        if (mMediaInfo == null || mWidth == 0 || mHeight == 0 || mCSD0 == null) return;
+        if (mMediaInfo == null || mWidth <= 0 || mHeight <= 0 || mCSD0 == null) {
+            Log.w(TAG, "startRecord skipped: mediaInfo=" + (mMediaInfo != null)
+                    + ", size=" + mWidth + "x" + mHeight
+                    + ", csd0=" + (mCSD0 != null));
+            return;
+        }
+        if (TextUtils.isEmpty(path)) {
+            Log.e(TAG, "startRecord skipped: output path is empty");
+            return;
+        }
 
-        mRecordingPath = path;
         EasyMuxer2 muxer2 = new EasyMuxer2();
         mMuxerCuttingMillis = 0l;
         mRecordingStatus = 0;
@@ -1531,12 +1539,14 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
         int r = muxer2.create(path, mMediaInfo.videoCodec == EASY_SDK_VIDEO_CODEC_H265 ? VIDEO_TYPE_H265 : VIDEO_TYPE_H264, mWidth, mHeight, extra, mMediaInfo.sample, mMediaInfo.channel);
         if (r != 0) {
-            Log.w(TAG, "create muxer2:" + r);
+            Log.e(TAG, "startRecord failed: muxer create returned " + r + ", path=" + path);
             return;
         }
 
+        mRecordingPath = path;
         mMuxerWaitingKeyVideo = true;
         this.muxer2 = muxer2;
+        Log.i(TAG, "recording started: " + path + ", size=" + mWidth + "x" + mHeight);
 
         ResultReceiver rr = mRR;
         if (rr != null) {
@@ -1640,6 +1650,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
 
 
     public synchronized void stopRecord() {
+        Log.i(TAG, "stopRecord requested: active=" + (this.muxer2 != null));
         mRecordingPath = null;
         mMuxerCuttingMillis = 0l;
         mRecordingStatus = 0;
@@ -1648,6 +1659,7 @@ public class EasyPlayerClient implements Client.SourceCallBack {
         if (muxer2 == null) return;
         this.muxer2 = null;
         muxer2.close();
+        Log.i(TAG, "recording stopped");
         mObject = null;
         ResultReceiver rr = mRR;
         if (rr != null) {
@@ -1724,6 +1736,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                 mHeight = frameInfo.height;
                 Bundle data = new Bundle();
                 data.putInt("code", 900);
+                data.putInt(EXTRA_VIDEO_WIDTH, mWidth);
+                data.putInt(EXTRA_VIDEO_HEIGHT, mHeight);
                 data.putString("msg", String.format("分辨率 :%d x %d ;", mWidth, mHeight));
                 if (rr != null) rr.send(0, data);
                 Log.i(TAG, String.format("width:%d,height:%d", mWidth, mHeight));
@@ -1778,6 +1792,8 @@ public class EasyPlayerClient implements Client.SourceCallBack {
                     ResultReceiver rr = mRR;
                     Bundle data = new Bundle();
                     data.putInt("code", 9003);
+                    data.putInt(EXTRA_VIDEO_WIDTH, frameInfo.width);
+                    data.putInt(EXTRA_VIDEO_HEIGHT, frameInfo.height);
                     data.putString("msg", String.format("变化后的宽高:%dx%d", frameInfo.width, frameInfo.height));
                     mWidth = frameInfo.width;
                     mHeight = frameInfo.height;

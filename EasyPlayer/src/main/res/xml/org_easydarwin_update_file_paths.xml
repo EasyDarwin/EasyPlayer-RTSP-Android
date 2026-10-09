@@ -2,7 +2,9 @@
 <resources>
     <paths>
         <external-path path="Download" name="download"/>
-        <external-files-path name="Pictures" path="Pictures/EasyPlayer"/>
-        <external-files-path name="Movies" path="Movies/EasyPlayer"/>
+        <external-files-path name="Pictures" path="Pictures/EasyPlayerRTSP"/>
+        <external-files-path name="Movies" path="Movies/EasyPlayerRTSP"/>
+        <files-path name="PrivatePictures" path="Pictures/EasyPlayerRTSP"/>
+        <files-path name="PrivateMovies" path="Movies/EasyPlayerRTSP"/>
     </paths>
 </resources>

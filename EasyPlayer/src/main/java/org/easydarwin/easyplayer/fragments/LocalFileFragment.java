@@ -1,12 +1,10 @@
 package org.easydarwin.easyplayer.fragments;
 
-import android.content.ActivityNotFoundException;
-import android.content.Intent;
 import android.databinding.DataBindingUtil;
-import android.net.Uri;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
+import android.support.v7.widget.PopupMenu;
 import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
@@ -23,6 +21,8 @@ import android.widget.Toast;
 import com.bumptech.glide.Glide;
 
 import org.easydarwin.easyplayer.R;
+import org.easydarwin.easyplayer.activity.LocalPlaybackActivity;
+import org.easydarwin.easyplayer.util.MediaFileActions;
 import org.easydarwin.easyplayer.databinding.FragmentMediaFileBinding;
 import org.easydarwin.easyplayer.databinding.ImagePickerItemBinding;
 import org.easydarwin.easyplayer.util.FileUtil;
@@ -56,9 +56,9 @@ public class LocalFileFragment extends Fragment implements CompoundButton.OnChec
         mSuffix = mShowMp4File ? ".mp4" : ".jpg";
 
         if (mShowMp4File) {
-            mRoot = new File(FileUtil.getMoviePath(url));
+            mRoot = new File(FileUtil.getMoviePath(getContext(), url));
         } else {
-            mRoot = new File(FileUtil.getPicturePath(url));
+            mRoot = new File(FileUtil.getPicturePath(getContext(), url));
         }
 
         File[] subFiles = mRoot.listFiles(new FilenameFilter() {
@@ -142,29 +142,28 @@ public class LocalFileFragment extends Fragment implements CompoundButton.OnChec
         }
 
         File f = new File(path);
-        Uri uri = Uri.fromFile(f);
-//        Uri uri = FileProvider.getUriForFile(getActivity(), getString(R.string.org_easydarwin_update_authorities), new File(path));
-
-        Intent intent = new Intent();
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-        if (path.endsWith(".jpg")) {
-            try {
-                intent.setAction(Intent.ACTION_VIEW);
-                intent.setDataAndType(uri, "image/*");
-                startActivity(intent);
-            } catch (ActivityNotFoundException e) {
-                e.printStackTrace();
-            }
-        } else if (path.endsWith(".mp4")) {
-            try {
-                intent.setAction(Intent.ACTION_VIEW);
-                intent.setDataAndType(uri, "video/*");
-                startActivity(intent);
-            } catch (ActivityNotFoundException e) {
-                e.printStackTrace();
-            }
+        if (!f.isFile() || f.length() == 0) {
+            Toast.makeText(getContext(), "文件不存在或为空", Toast.LENGTH_SHORT).show();
+            return;
         }
+        if (mShowMp4File) {
+            startActivity(LocalPlaybackActivity.intent(getContext(), f));
+        } else {
+            getFragmentManager().beginTransaction()
+                    .add(android.R.id.content, ImageFragment.newGalleryInstance(mRoot, f))
+                    .addToBackStack(null).commit();
+        }
+    }
+
+    private void showFileActions(View anchor, File file) {
+        PopupMenu menu = new PopupMenu(getContext(), anchor);
+        menu.getMenu().add(0, 1, 0, "分享");
+        menu.getMenu().add(0, 2, 1, "用其他应用打开");
+        menu.setOnMenuItemClickListener(item -> {
+            MediaFileActions.launch(getContext(), file, item.getItemId() == 1);
+            return true;
+        });
+        menu.show();
     }
 
     class ImageItemHolder extends RecyclerView.ViewHolder {
@@ -179,6 +178,14 @@ public class LocalFileFragment extends Fragment implements CompoundButton.OnChec
             mImage = binding.imageIcon;
             mPlayImage = binding.imagePlay;
             mImage.setOnClickListener(LocalFileFragment.this);
+            mImage.setOnLongClickListener(v -> {
+                int position = getAdapterPosition();
+                if (position != RecyclerView.NO_POSITION) {
+                    showFileActions(v, mSubFiles[position]);
+                    return true;
+                }
+                return false;
+            });
         }
     }
 }

@@ -130,7 +130,7 @@ public class PlayListActivity extends AppCompatActivity implements View.OnClickL
                     plvh.mTextView.setText(url);
                 }
 
-                File file = FileUtil.getSnapFile(url);
+                File file = FileUtil.getSnapFile(PlayListActivity.this, url);
                 Glide.with(PlayListActivity.this).load(file).signature(new StringSignature(UUID.randomUUID().toString())).placeholder(R.drawable.placeholder).centerCrop().into(plvh.mImageView);
 
                 int audienceNumber = mCursor.getInt(mCursor.getColumnIndex(VideoSource.AUDIENCE_NUMBER));

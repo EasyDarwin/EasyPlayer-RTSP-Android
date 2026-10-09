@@ -82,7 +82,7 @@
 
         <TextView
             android:layout_width="wrap_content"
-            android:text="测试录像步骤:\n1 启动录像；\n2 暂停录像，等一段时间；\n3 恢复录像；\n4 停止录像； \n然后查看录像文件是否连续。其中2，3步可重复多次\n录像文件路径为/sdcard/test.mp4\n每次录像时会覆盖已有文件"
+            android:text="测试录像步骤:\n1 启动录像；\n2 暂停录像，等一段时间；\n3 恢复录像；\n4 停止录像； \n然后查看录像文件是否连续。其中2，3步可重复多次\n录像保存在应用专属 Movies/EasyPlayerRTSP 目录中。"
             android:layout_height="wrap_content" />
 
         <Button
